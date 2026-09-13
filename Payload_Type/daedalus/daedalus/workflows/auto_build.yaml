@@ -1,0 +1,29 @@
+name: Daedalus Auto Build
+description: Automatically trigger a CI/CD rebuild when a payload is built
+trigger: payload_build_finish
+trigger_data:
+    payload_types: []
+environment:
+    PROVIDER: jenkins
+    JOB: maas-loader-build
+    POLL: "true"
+    TIMEOUT: "300"
+keywords:
+    - daedalus
+    - build
+    - auto
+run_as: bot
+steps:
+    - name: trigger_rebuild
+      description: Trigger a CI/CD build for the newly built payload
+      action: custom_function
+      action_data:
+          container_name: daedalus
+          function_name: trigger_build
+      inputs:
+          provider: "{{env.PROVIDER}}"
+          job: "{{env.JOB}}"
+          mythic_api_token: "{{mythic.apitoken}}"
+          payload_uuid: "{{trigger.payload_uuid}}"
+          poll: "{{env.POLL}}"
+          timeout: "{{env.TIMEOUT}}"

@@ -1,0 +1,72 @@
+// Jenkins pipeline for Daedalus-triggered payload builds.
+//
+// Daedalus calls buildWithParameters on this job.
+// Runs on a node labeled "maas" with your build toolchain installed.
+
+pipeline {
+    agent { label 'maas' }
+
+    parameters {
+        string(name: 'LANGUAGE',         defaultValue: 'c-mingw',  description: 'Build language/toolchain')
+        string(name: 'OUTPUT_FORMAT',    defaultValue: 'exe',      description: 'Output format (exe, dll, bin)')
+        string(name: 'OBFUSCATION',      defaultValue: 'none',     description: 'Obfuscation profile')
+        string(name: 'SHELLCODE_SOURCE', defaultValue: '',         description: 'Mythic payload ref (mythic:<uuid>)')
+        string(name: 'SHELLCODE_FILE',   defaultValue: 'shellcode/payload.bin', description: 'Path to shellcode file')
+        string(name: 'MYTHIC_URL',       defaultValue: '',         description: 'Mythic server URL')
+        password(name: 'MYTHIC_TOKEN',   defaultValue: '',         description: 'Mythic API token')
+    }
+
+    stages {
+        stage('Fetch Payload') {
+            steps {
+                sh 'mkdir -p shellcode'
+
+                script {
+                    if (params.SHELLCODE_SOURCE?.startsWith('mythic:')) {
+                        def uuid = params.SHELLCODE_SOURCE.replace('mythic:', '')
+                        echo "[*] Fetching payload ${uuid} from Mythic"
+                        sh """
+                            curl -sf -H "Authorization: Bearer ${params.MYTHIC_TOKEN}" \
+                                "${params.MYTHIC_URL}/api/v1.4/files/download/${uuid}" \
+                                -o "${WORKSPACE}/${params.SHELLCODE_FILE}"
+                            ls -la "${WORKSPACE}/${params.SHELLCODE_FILE}"
+                        """
+                    }
+                }
+
+                sh "test -f '${WORKSPACE}/${params.SHELLCODE_FILE}' || { echo '[-] No shellcode file'; exit 1; }"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mkdir -p build'
+
+                echo "[*] Language=${params.LANGUAGE} Format=${params.OUTPUT_FORMAT} Obfuscation=${params.OBFUSCATION}"
+
+                // ---- Replace this block with your build commands ----
+                // Example for a C/MinGW cross-compile:
+                //   sh "x86_64-w64-mingw32-gcc -o build/implant.exe src/main.c -I shellcode/"
+                //
+                // Example for a Go build:
+                //   sh "GOOS=windows GOARCH=amd64 go build -o build/implant.exe ./cmd/loader"
+                // ---------------------------------------------------------
+
+                echo '[+] Build complete'
+                sh 'ls -la build/'
+            }
+        }
+    }
+
+    post {
+        success {
+            archiveArtifacts artifacts: 'build/**', fingerprint: true
+        }
+        failure {
+            echo '[-] Build failed'
+        }
+        cleanup {
+            sh 'rm -rf shellcode/ || true'
+        }
+    }
+}

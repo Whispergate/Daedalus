@@ -1,0 +1,71 @@
+# GitLab CI pipeline for Daedalus-triggered payload builds.
+#
+# Daedalus triggers this via the pipeline API with variables.
+# Runs on a runner tagged "maas" with your build toolchain installed.
+
+stages:
+  - fetch
+  - build
+
+variables:
+  LANGUAGE: "c-mingw"
+  OUTPUT_FORMAT: "exe"
+  OBFUSCATION: "none"
+  SHELLCODE_SOURCE: ""
+  SHELLCODE_FILE: "shellcode/payload.bin"
+  MYTHIC_URL: ""
+  MYTHIC_TOKEN: ""
+
+fetch_payload:
+  stage: fetch
+  tags:
+    - maas
+  script:
+    - mkdir -p shellcode
+
+    - |
+      if echo "$SHELLCODE_SOURCE" | grep -q '^mythic:'; then
+        UUID="${SHELLCODE_SOURCE#mythic:}"
+        echo "[*] Fetching payload ${UUID} from Mythic"
+        curl -sf -H "Authorization: Bearer ${MYTHIC_TOKEN}" \
+          "${MYTHIC_URL}/api/v1.4/files/download/${UUID}" \
+          -o "${CI_PROJECT_DIR}/${SHELLCODE_FILE}"
+        ls -la "${CI_PROJECT_DIR}/${SHELLCODE_FILE}"
+      fi
+
+    - test -f "${CI_PROJECT_DIR}/${SHELLCODE_FILE}" || { echo "[-] No shellcode file at ${SHELLCODE_FILE}"; exit 1; }
+
+  artifacts:
+    paths:
+      - shellcode/
+    expire_in: 1 hour
+
+build:
+  stage: build
+  tags:
+    - maas
+  script:
+    - mkdir -p build
+
+    - echo "[*] Language=${LANGUAGE} Format=${OUTPUT_FORMAT} Obfuscation=${OBFUSCATION}"
+
+    # ---- Replace this block with your build commands ----
+    # Example for a C/MinGW cross-compile:
+    #   x86_64-w64-mingw32-gcc -o build/implant.exe src/main.c \
+    #     -I shellcode/ -DOBFUSCATION=${OBFUSCATION}
+    #
+    # Example for a Go build:
+    #   GOOS=windows GOARCH=amd64 go build -o build/implant.exe ./cmd/loader
+    #
+    # Example for C# with Mono:
+    #   mcs -out:build/implant.exe -target:${OUTPUT_FORMAT} src/*.cs
+    # ---------------------------------------------------------
+
+    - echo "[+] Build complete"
+    - ls -la build/
+
+  artifacts:
+    name: "${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - build/
+    expire_in: 1 day

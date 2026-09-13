@@ -1,0 +1,35 @@
+name: Daedalus Manual Build
+description: Manually trigger a CI/CD build from Mythic
+trigger: manual
+trigger_data: {}
+environment:
+    PROVIDER: jenkins
+    JOB: maas-loader-build
+    LANGUAGE: c-mingw
+    OUTPUT_FORMAT: exe
+    OBFUSCATION: none
+    PAYLOAD_UUID: ""
+    POLL: "true"
+    TIMEOUT: "300"
+keywords:
+    - daedalus
+    - build
+    - cicd
+run_as: bot
+steps:
+    - name: trigger_build
+      description: Trigger a CI/CD build and poll for completion
+      action: custom_function
+      action_data:
+          container_name: daedalus
+          function_name: trigger_build
+      inputs:
+          provider: "{{env.PROVIDER}}"
+          job: "{{env.JOB}}"
+          mythic_api_token: "{{mythic.apitoken}}"
+          payload_uuid: "{{env.PAYLOAD_UUID}}"
+          poll: "{{env.POLL}}"
+          timeout: "{{env.TIMEOUT}}"
+          language: "{{env.LANGUAGE}}"
+          output_format: "{{env.OUTPUT_FORMAT}}"
+          obfuscation: "{{env.OBFUSCATION}}"

@@ -1,0 +1,51 @@
+name: Daedalus Build and Scan
+description: Trigger a CI/CD build, then submit the result to Sphinx/LitterBox for scanning
+trigger: manual
+trigger_data: {}
+environment:
+    PROVIDER: jenkins
+    JOB: maas-loader-build
+    LANGUAGE: c-mingw
+    OUTPUT_FORMAT: exe
+    OBFUSCATION: none
+    PAYLOAD_UUID: ""
+    TIMEOUT: "300"
+    SCAN_TYPE: all
+    SCAN_METHOD: sphinx
+    LITTERBOX_URL: ""
+keywords:
+    - daedalus
+    - build
+    - scan
+    - sphinx
+run_as: bot
+steps:
+    - name: trigger_build
+      description: Trigger a CI/CD build and poll for completion
+      action: custom_function
+      action_data:
+          container_name: daedalus
+          function_name: trigger_build
+      inputs:
+          provider: "{{env.PROVIDER}}"
+          job: "{{env.JOB}}"
+          mythic_api_token: "{{mythic.apitoken}}"
+          payload_uuid: "{{env.PAYLOAD_UUID}}"
+          poll: "true"
+          timeout: "{{env.TIMEOUT}}"
+          language: "{{env.LANGUAGE}}"
+          output_format: "{{env.OUTPUT_FORMAT}}"
+          obfuscation: "{{env.OBFUSCATION}}"
+    - name: scan_payload
+      description: Submit the payload to LitterBox via Sphinx for scanning
+      action: custom_function
+      action_data:
+          container_name: daedalus
+          function_name: scan_payload
+      inputs:
+          payload_uuid: "{{env.PAYLOAD_UUID}}"
+          mythic_api_token: "{{mythic.apitoken}}"
+          litterbox_url: "{{env.LITTERBOX_URL}}"
+          scan_type: "{{env.SCAN_TYPE}}"
+          method: "{{env.SCAN_METHOD}}"
+          timeout: "120"

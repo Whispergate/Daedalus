@@ -1,0 +1,82 @@
+# Forgejo Actions workflow for Daedalus-triggered payload builds.
+#
+# Daedalus dispatches this via the workflow_dispatch event.
+# Runs on a self-hosted Forgejo runner labeled "maas" with your
+# build toolchain installed.
+#
+# Place in .forgejo/workflows/ or .gitea/workflows/ in your
+# build repository.
+
+name: Daedalus Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      LANGUAGE:
+        description: "Build language/toolchain"
+        required: false
+        default: "c-mingw"
+      OUTPUT_FORMAT:
+        description: "Output format (exe, dll, bin)"
+        required: false
+        default: "exe"
+      OBFUSCATION:
+        description: "Obfuscation profile"
+        required: false
+        default: "none"
+      SHELLCODE_SOURCE:
+        description: "Mythic payload ref (mythic:<uuid>)"
+        required: false
+        default: ""
+      SHELLCODE_FILE:
+        description: "Path to shellcode file in repo"
+        required: false
+        default: "shellcode/payload.bin"
+
+jobs:
+  build:
+    runs-on: [self-hosted, maas]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch payload from Mythic
+        if: startsWith(inputs.SHELLCODE_SOURCE, 'mythic:')
+        run: |
+          mkdir -p shellcode
+          UUID="${{ inputs.SHELLCODE_SOURCE }}"
+          UUID="${UUID#mythic:}"
+          echo "[*] Fetching payload ${UUID} from Mythic"
+          curl -sf -H "Authorization: Bearer ${{ secrets.MYTHIC_TOKEN }}" \
+            "${{ secrets.MYTHIC_URL }}/api/v1.4/files/download/${UUID}" \
+            -o "${{ inputs.SHELLCODE_FILE }}"
+          ls -la "${{ inputs.SHELLCODE_FILE }}"
+
+      - name: Validate shellcode
+        run: |
+          test -f "${{ inputs.SHELLCODE_FILE }}" || { echo "[-] No shellcode file at ${{ inputs.SHELLCODE_FILE }}"; exit 1; }
+
+      - name: Build
+        run: |
+          mkdir -p build
+
+          echo "[*] Language=${{ inputs.LANGUAGE }} Format=${{ inputs.OUTPUT_FORMAT }} Obfuscation=${{ inputs.OBFUSCATION }}"
+
+          # ---- Replace this block with your build commands ----
+          # Example for a C/MinGW cross-compile:
+          #   x86_64-w64-mingw32-gcc -o build/implant.exe src/main.c \
+          #     -I shellcode/ -DOBFUSCATION=${{ inputs.OBFUSCATION }}
+          #
+          # Example for a Go build:
+          #   GOOS=windows GOARCH=amd64 go build -o build/implant.exe ./cmd/loader
+          # ---------------------------------------------------------
+
+          echo "[+] Build complete"
+          ls -la build/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-${{ github.run_id }}
+          path: build/

@@ -1,0 +1,21 @@
+name: Daedalus Get Verdict
+description: Retrieve Sphinx scan verdict and Daedalus build tags for a payload
+trigger: manual
+trigger_data: {}
+environment:
+    PAYLOAD_UUID: ""
+keywords:
+    - daedalus
+    - verdict
+    - sphinx
+run_as: bot
+steps:
+    - name: get_verdict
+      description: Query Sphinx and Daedalus tags for the payload
+      action: custom_function
+      action_data:
+          container_name: daedalus
+          function_name: get_verdict
+      inputs:
+          payload_uuid: "{{env.PAYLOAD_UUID}}"
+          mythic_api_token: "{{mythic.apitoken}}"

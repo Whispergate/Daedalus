@@ -1,0 +1,25 @@
+name: Daedalus Check Build Status
+description: Check the status of a running or recent CI/CD build
+trigger: manual
+trigger_data: {}
+environment:
+    PROVIDER: jenkins
+    JOB: maas-loader-build
+    BUILD_ID: ""
+    INCLUDE_LOG: "false"
+keywords:
+    - daedalus
+    - status
+run_as: bot
+steps:
+    - name: check
+      description: Query build status from the CI/CD provider
+      action: custom_function
+      action_data:
+          container_name: daedalus
+          function_name: check_status
+      inputs:
+          provider: "{{env.PROVIDER}}"
+          job: "{{env.JOB}}"
+          build_id: "{{env.BUILD_ID}}"
+          include_log: "{{env.INCLUDE_LOG}}"

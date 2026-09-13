@@ -1,0 +1,29 @@
+name: Daedalus Download Artifact
+description: Download a build artifact from CI/CD and upload to Mythic
+trigger: manual
+trigger_data: {}
+environment:
+    PROVIDER: jenkins
+    JOB: maas-loader-build
+    BUILD_ID: ""
+    ARTIFACT_NAME: ""
+    PAYLOAD_UUID: ""
+keywords:
+    - daedalus
+    - artifact
+    - download
+run_as: bot
+steps:
+    - name: download
+      description: Download artifact and upload to Mythic
+      action: custom_function
+      action_data:
+          container_name: daedalus
+          function_name: download_artifact
+      inputs:
+          provider: "{{env.PROVIDER}}"
+          job: "{{env.JOB}}"
+          build_id: "{{env.BUILD_ID}}"
+          artifact_name: "{{env.ARTIFACT_NAME}}"
+          mythic_api_token: "{{mythic.apitoken}}"
+          payload_uuid: "{{env.PAYLOAD_UUID}}"
