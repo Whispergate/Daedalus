@@ -1,5 +1,5 @@
 name: Daedalus Build and Scan
-description: Trigger a CI/CD build, then submit the result to Sphinx/LitterBox for scanning
+description: Unified pipeline - trigger build, download artifact, upload to Mythic, scan via LitterBox
 trigger: manual
 trigger_data: {}
 environment:
@@ -14,41 +14,28 @@ environment:
     PAYLOAD_UUID: ""
     TIMEOUT: "300"
     SCAN_TYPE: all
-    SCAN_METHOD: sphinx
-    LITTERBOX_URL: ""
+    LITTERBOX_URL: http://10.5.99.12:1337
 keywords:
     - daedalus
     - build
     - scan
-    - sphinx
+    - litterbox
 run_as: bot
 steps:
-    - name: trigger_build
-      description: Trigger a CI/CD build and poll for completion
+    - name: build_and_scan
+      description: Build, download artifact, upload to Mythic, and scan via LitterBox
       action: custom_function
       action_data:
           container_name: daedalus
-          function_name: trigger_build
+          function_name: build_and_scan
       inputs:
           provider: "{{env.PROVIDER}}"
           job: "{{env.JOB}}"
           mythic_api_token: "{{mythic.apitoken}}"
           payload_uuid: "{{env.PAYLOAD_UUID}}"
-          poll: "true"
           timeout: "{{env.TIMEOUT}}"
           language: "{{env.LANGUAGE}}"
           output_format: "{{env.OUTPUT_FORMAT}}"
           obfuscation: "{{env.OBFUSCATION}}"
-    - name: scan_payload
-      description: Submit the payload to LitterBox via Sphinx for scanning
-      action: custom_function
-      action_data:
-          container_name: daedalus
-          function_name: scan_payload
-      inputs:
-          payload_uuid: "{{env.PAYLOAD_UUID}}"
-          mythic_api_token: "{{mythic.apitoken}}"
           litterbox_url: "{{env.LITTERBOX_URL}}"
           scan_type: "{{env.SCAN_TYPE}}"
-          method: "{{env.SCAN_METHOD}}"
-          timeout: "120"

@@ -214,15 +214,20 @@ mutation DaedalusInsertTag(
 }
 """
 
-_UPLOAD_FILE = """
-mutation DaedalusUploadFile($filename: String!, $contents: String!) {
-    uploadContainerFile(filename: $filename, contents: $contents) {
-        agent_file_id
-        status
-        error
-    }
-}
-"""
+async def _upload_file(headers: dict, filename: str, contents: bytes) -> str:
+    """Upload a file to Mythic via the REST webhook. Returns agent_file_id."""
+    async with httpx.AsyncClient(verify=False, timeout=30) as client:
+        r = await client.post(
+            f"{MYTHIC_SERVER}/api/v1.4/task_upload_file_webhook",
+            headers={"Authorization": headers.get("Authorization", "")},
+            files={"file": (filename, contents, "application/octet-stream")},
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data.get("status") != "success":
+            raise RuntimeError(f"Upload failed: {data.get('error', data)}")
+        logger.warning("Uploaded %s (%d bytes) → %s", filename, len(contents), data["agent_file_id"])
+        return data["agent_file_id"]
 
 
 # ---------------------------------------------------------------------------
@@ -428,15 +433,8 @@ async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingM
 
         if mythic_token and artifact_bytes:
             auth_headers = {"Authorization": f"Bearer {mythic_token}"}
-            encoded = base64.b64encode(artifact_bytes).decode()
             fname = artifact_name or f"daedalus-{provider_name}-{build_id}"
-
-            data = await _gql(auth_headers, _UPLOAD_FILE, {
-                "filename": fname,
-                "contents": encoded,
-            })
-            upload_result = data.get("uploadContainerFile", {})
-            file_id = upload_result.get("agent_file_id", "")
+            file_id = await _upload_file(auth_headers, fname, artifact_bytes)
 
             if payload_uuid:
                 payload_int_id, _, _ = await _query_payload(auth_headers, payload_uuid)
@@ -706,6 +704,204 @@ async def get_verdict(msg: NewCustomEventingMessage) -> NewCustomEventingMessage
 
     except Exception as exc:
         logger.exception("Daedalus get_verdict failed")
+        return _err(f"Daedalus error: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Custom function: build_and_scan (unified pipeline)
+# ---------------------------------------------------------------------------
+
+async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMessageResponse:
+    try:
+        inputs = _resolve_inputs(msg)
+        provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
+        job = inputs.get("job") or os.getenv("DAEDALUS_JOB", "")
+        language = inputs.get("language", "").lower().strip()
+        mythic_token = inputs.get("mythic_api_token", "")
+        payload_uuid = inputs.get("payload_uuid", "").strip()
+        litterbox_url = inputs.get("litterbox_url") or os.getenv("LITTERBOX_URL", "")
+        scan_type = inputs.get("scan_type", "all").lower()
+        edr_profile = inputs.get("edr_profile", "").strip()
+
+        raw_timeout = inputs.get("timeout", "300")
+        try:
+            poll_timeout = int(raw_timeout)
+        except (ValueError, TypeError):
+            poll_timeout = 300
+
+        if not job and language:
+            job = f"loader-{language}"
+            logger.warning("Job auto-resolved from language %r → %s", language, job)
+
+        if not job:
+            return _err("'job' (or 'language') input required")
+        if not mythic_token:
+            return _err("'mythic_api_token' input required")
+
+        auth_headers = {"Authorization": f"Bearer {mythic_token}"}
+
+        # --- Phase 1: Resolve source payload and trigger build ---
+        build_params = _extract_build_params(inputs)
+        provider_kwargs = _provider_kwargs_from_inputs(inputs, provider_name)
+        provider = get_provider(provider_name, **provider_kwargs)
+
+        payload_int_id = None
+        if payload_uuid:
+            payload_int_id, agent_file_id, filename = await _query_payload(auth_headers, payload_uuid)
+            if agent_file_id:
+                payload_bytes = await _download_file(auth_headers, agent_file_id)
+                build_params["SHELLCODE_SOURCE"] = f"mythic:{payload_uuid}"
+                build_params["PAYLOAD_SIZE"] = str(len(payload_bytes))
+                logger.warning(
+                    "Payload %s resolved: %d bytes (%s)",
+                    payload_uuid, len(payload_bytes), filename,
+                )
+
+        logger.warning(
+            "build_and_scan: triggering %s job=%s params=%s",
+            provider_name, job, list(build_params.keys()),
+        )
+        result = await provider.trigger_build(job, build_params)
+
+        if result.status == BuildStatus.FAILURE:
+            return _err(f"Build trigger failed: {result.error}")
+        if not result.build_id:
+            return _err(f"Build dispatched but no build ID resolved. URL: {result.url}")
+
+        logger.warning("build_and_scan: polling build #%s", result.build_id)
+        final = await _poll_build(provider, job, result.build_id, poll_timeout)
+        logger.warning(
+            "build_and_scan: build %s #%s → %s (%.0fs)",
+            provider_name, final.build_id, final.status.value,
+            final.duration_seconds or 0,
+        )
+
+        if final.status != BuildStatus.SUCCESS:
+            status_label = final.status.value.upper()
+            return _err(
+                f"Build {status_label}: {provider_name} #{final.build_id}"
+                + (f" | Error: {final.error}" if final.error else "")
+            )
+
+        # --- Phase 2: Download artifact from CI and upload to Mythic ---
+        artifact_name = inputs.get("artifact_name", "").strip()
+
+        artifacts = await provider.list_artifacts(job, final.build_id)
+        if not artifacts:
+            logger.warning("build_and_scan: no artifacts found for build #%s", final.build_id)
+            if payload_int_id:
+                await _tag_payload_with_build(
+                    auth_headers, payload_int_id, provider_name, job, final,
+                )
+            return _ok(
+                f"Build SUCCESS: {provider_name} #{final.build_id} "
+                f"(duration={final.duration_seconds:.0f}s) | "
+                f"No artifacts found to scan"
+            )
+
+        if artifact_name:
+            target = next((a for a in artifacts if a.get("relativePath") == artifact_name
+                          or a.get("fileName") == artifact_name), None)
+        else:
+            target = artifacts[0]
+
+        if not target:
+            return _err(f"Artifact {artifact_name!r} not found in build #{final.build_id}")
+
+        artifact_path = target.get("relativePath") or target.get("fileName", "artifact")
+        logger.warning("build_and_scan: downloading artifact %s", artifact_path)
+        artifact_bytes = await provider.download_artifact(job, final.build_id, artifact_path)
+        logger.warning("build_and_scan: downloaded %d bytes", len(artifact_bytes))
+
+        upload_filename = artifact_path.split("/")[-1]
+        uploaded_file_id = await _upload_file(auth_headers, upload_filename, artifact_bytes)
+        logger.warning(
+            "build_and_scan: uploaded to Mythic as %s (file_id=%s)",
+            upload_filename, uploaded_file_id,
+        )
+
+        if payload_int_id:
+            await _tag_payload_with_build(
+                auth_headers, payload_int_id, provider_name, job, final,
+                extra_data={
+                    "artifact_file_id": uploaded_file_id,
+                    "artifact_name": upload_filename,
+                },
+            )
+
+        # --- Phase 3: Scan the artifact via LitterBox ---
+        if not litterbox_url:
+            return _ok(
+                f"Build SUCCESS: {provider_name} #{final.build_id} "
+                f"(duration={final.duration_seconds:.0f}s) | "
+                f"Artifact uploaded to Mythic (file_id={uploaded_file_id}) | "
+                f"No LITTERBOX_URL set - skipping scan"
+            )
+
+        litterbox_url = litterbox_url.rstrip("/")
+        logger.warning("build_and_scan: uploading artifact to LitterBox at %s", litterbox_url)
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{litterbox_url}/upload",
+                files={"file": (upload_filename, artifact_bytes, "application/octet-stream")},
+            )
+            if r.status_code != 200:
+                return _ok(
+                    f"Build SUCCESS: {provider_name} #{final.build_id} | "
+                    f"Artifact uploaded to Mythic (file_id={uploaded_file_id}) | "
+                    f"LitterBox upload failed: HTTP {r.status_code}"
+                )
+            md5 = r.json()["file_info"]["md5"]
+
+        logger.warning("build_and_scan: triggering scans (md5=%s, type=%s)", md5, scan_type)
+        async with httpx.AsyncClient(timeout=120) as client:
+            scan_endpoints = []
+            if scan_type in ("static", "both", "all"):
+                scan_endpoints.append(("static", f"{litterbox_url}/analyze/static/{md5}"))
+            if scan_type in ("dynamic", "both", "all"):
+                scan_endpoints.append(("dynamic", f"{litterbox_url}/analyze/dynamic/{md5}"))
+            if scan_type in ("edr", "all") and edr_profile:
+                scan_endpoints.append(("edr", f"{litterbox_url}/analyze/edr/{edr_profile}/{md5}"))
+
+            for label, url in scan_endpoints:
+                try:
+                    await client.post(url)
+                    logger.warning("build_and_scan: triggered %s scan", label)
+                except httpx.HTTPError as exc:
+                    logger.warning("build_and_scan: %s scan trigger failed: %r", label, exc)
+
+        await asyncio.sleep(min(poll_timeout, 10))
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            try:
+                r = await client.get(f"{litterbox_url}/api/results/risk/{md5}")
+                if r.status_code == 200:
+                    risk = r.json()
+                    level = risk.get("risk_level", "unknown")
+                    score = risk.get("risk_score", "N/A")
+                    return _ok(
+                        f"Build SUCCESS: {provider_name} #{final.build_id} "
+                        f"(duration={final.duration_seconds:.0f}s) | "
+                        f"Artifact: {upload_filename} ({len(artifact_bytes)} bytes, "
+                        f"file_id={uploaded_file_id}) | "
+                        f"LitterBox: {level} risk (score={score}) | "
+                        f"Results: {litterbox_url}/results/info/{md5}"
+                    )
+            except httpx.HTTPError:
+                pass
+
+        return _ok(
+            f"Build SUCCESS: {provider_name} #{final.build_id} "
+            f"(duration={final.duration_seconds:.0f}s) | "
+            f"Artifact: {upload_filename} ({len(artifact_bytes)} bytes, "
+            f"file_id={uploaded_file_id}) | "
+            f"Scan triggered (md5={md5}), results may still be processing: "
+            f"{litterbox_url}/results/info/{md5}"
+        )
+
+    except Exception as exc:
+        logger.exception("Daedalus build_and_scan failed")
         return _err(f"Daedalus error: {exc}")
 
 
@@ -1055,6 +1251,14 @@ class DaedalusEventing(Eventing):
                 "for a payload"
             ),
             Function=get_verdict,
+        ),
+        CustomFunctionDefinition(
+            Name="build_and_scan",
+            Description=(
+                "Unified pipeline: trigger build, poll, download artifact, "
+                "upload to Mythic, and scan via LitterBox"
+            ),
+            Function=build_and_scan,
         ),
     ]
 

@@ -1,5 +1,5 @@
 name: Daedalus Auto Build
-description: Automatically trigger a CI/CD rebuild when a payload is built
+description: Automatically build, download artifact, upload to Mythic, and scan when a payload is built
 trigger: payload_build_finish
 trigger_data:
     payload_types: []
@@ -9,24 +9,33 @@ environment:
     JENKINS_URL: http://10.5.99.3:8080
     JENKINS_USER: admin
     JENKINS_TOKEN: admin
-    POLL: "true"
+    LANGUAGE: c-mingw
+    OUTPUT_FORMAT: exe
+    OBFUSCATION: none
     TIMEOUT: "300"
+    SCAN_TYPE: all
+    LITTERBOX_URL: http://10.5.99.12:1337
 keywords:
     - daedalus
     - build
     - auto
+    - scan
 run_as: bot
 steps:
-    - name: trigger_rebuild
-      description: Trigger a CI/CD build for the newly built payload
+    - name: build_and_scan
+      description: Build, download artifact, upload to Mythic, and scan via LitterBox
       action: custom_function
       action_data:
           container_name: daedalus
-          function_name: trigger_build
+          function_name: build_and_scan
       inputs:
           provider: "{{env.PROVIDER}}"
           job: "{{env.JOB}}"
           mythic_api_token: "{{mythic.apitoken}}"
           payload_uuid: "{{trigger.payload_uuid}}"
-          poll: "{{env.POLL}}"
           timeout: "{{env.TIMEOUT}}"
+          language: "{{env.LANGUAGE}}"
+          output_format: "{{env.OUTPUT_FORMAT}}"
+          obfuscation: "{{env.OBFUSCATION}}"
+          litterbox_url: "{{env.LITTERBOX_URL}}"
+          scan_type: "{{env.SCAN_TYPE}}"

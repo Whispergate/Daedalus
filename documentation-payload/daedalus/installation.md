@@ -39,9 +39,13 @@ The `rabbitmq_password` must match your Mythic installation's RabbitMQ password 
 
 ### Eventing Workflows
 
-As of v3.3.36, workflows have to be added manually due to a bug. To do so, go to each file in `Payload_Type/daedalus/daedalus/workflows/*.yaml` and upload them to the eventing page
+As of v3.3.36, the `eventingImportContainerWorkflow` mutation has a bug (`filemeta` null constraint), so workflows must be uploaded manually. After every container rebuild that changes workflow YAML files, re-upload them through the Mythic Eventing UI to update the definitions in Mythic's database.
+
+Upload each file from `Payload_Type/daedalus/daedalus/workflows/*.yaml`:
 
 ![Eventing Upload](image.png)
+
+**Note:** The `build_and_scan.yaml` workflow calls Daedalus's unified `build_and_scan` function which handles the full pipeline (build, artifact download, Mythic upload, LitterBox scan) in a single step. The `scan_payload.yaml` workflow calls Sphinx's `execute_script` function directly. If Sphinx is not available, use Daedalus's `scan_payload` custom function with `method=direct` and a `LITTERBOX_URL` instead.
 
 ### Environment Variables
 
@@ -52,8 +56,8 @@ Set these in Mythic's Eventing UI:
 
 The workflows which need to have their environment variables set are:
 
-- Daedalus Scan Payload
-- Daedalus Build and Scan
+- Daedalus Scan Payload (`LITTERBOX_URL`, `PAYLOAD_UUID`)
+- Daedalus Build and Scan (`LITTERBOX_URL`, `PAYLOAD_UUID`, `LANGUAGE`)
 
 #### General
 
@@ -61,6 +65,16 @@ The workflows which need to have their environment variables set are:
 |----------|---------|-------------|
 | `DAEDALUS_PROVIDER` | `jenkins` | Default CI provider |
 | `DAEDALUS_JOB` | (auto-resolved) | Default job/pipeline name. When empty, auto-resolved from the `LANGUAGE` variable as `loader-{language}` (e.g. `c-mingw` → `loader-c-mingw`) |
+
+#### Build Parameters
+
+These are forwarded to the CI/CD pipeline as build parameters. Daedalus does not interpret them - their meaning is defined by your pipeline's build stage.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LANGUAGE` | `c-mingw` | Build language/toolchain identifier. Also used for job auto-resolution (`loader-{language}`). Labyrinth standard values: `c-mingw`, `csharp`, `rust`, `go`, `nim`, `cpp-mingw`. Custom pipelines can use any value as long as a matching `loader-{value}` job exists |
+| `OUTPUT_FORMAT` | `exe` | Output format passed to the pipeline. Common values: `exe` (Windows executable), `dll` (dynamic library), `bin` (raw binary/shellcode), `shellcode` (position-independent code), `svc` (Windows service executable). The pipeline's build stage interprets this value to select compiler flags and linker options |
+| `OBFUSCATION` | `none` | Obfuscation profile name passed to the pipeline. The value is toolchain-specific - common values: `none` (no obfuscation), `basic` (simple transforms like string encryption), `full` (aggressive obfuscation including control flow flattening), or a named profile defined in your build scripts (e.g. `shikata`, `xor`, `aes`). Your Jenkinsfile or workflow config decides what each value does |
 
 #### Jenkins
 

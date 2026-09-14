@@ -21,7 +21,8 @@ Daedalus Container
     ├─→ GitLab API      (pipeline trigger, status, job artifacts)
     ├─→ Gitea API       (workflow dispatch, run status, artifacts)
     │
-    └─→ Mythic GraphQL  (query payloads, upload files, create tags)
+    ├─→ Mythic GraphQL  (query payloads, create tags)
+    └─→ Mythic REST API (upload files)
 ```
 
 ## Component Design
@@ -76,32 +77,30 @@ Sphinx (scan payload)    ←─────────────────�
     └── LitterBox verdict → Mythic tag
 ```
 
-The `auto_build.yaml` workflow triggers on `payload_build_finish`, so Daedalus automatically starts a CI/CD rebuild when Erebus or another agent produces a new payload. Sphinx then picks up the output via its own `payload_build_finish` trigger to run LitterBox scans.
+The `auto_build.yaml` workflow triggers on `payload_build_finish` and calls the unified `build_and_scan` function, so Daedalus automatically runs the full pipeline (build, artifact download, Mythic upload, LitterBox scan) when Erebus or another agent produces a new payload.
 
-### Sphinx Integration (scan_payload)
+### Sphinx Integration
 
-Daedalus can invoke Sphinx to scan payloads via LitterBox. Two methods are supported:
-
-**Method 1: Via Sphinx (`method=sphinx`, default)**
+Daedalus workflows that include scanning (Build and Scan, Scan Payload) call Sphinx's `execute_script` custom function directly as a workflow step. Mythic routes the call to Sphinx over RabbitMQ - the same mechanism Sphinx's own workflows use.
 
 ```
-Daedalus                    Mythic Server                 Sphinx
-   │                             │                           │
-   │  eventingInvokeCustom       │                           │
-   │  Function(sphinx,           │  RabbitMQ call             │
-   │  execute_script)  ────────► │ ─────────────────────────► │
-   │                             │                           │
-   │                             │   Sphinx uploads to       │
-   │                             │   LitterBox, scans,       │
-   │                             │   tags payload             │
-   │                             │                           │
-   │  ◄──────────────────────────│ ◄───────────────────────── │
-   │  response with scan results │                           │
+Mythic Server
+   │
+   │  Step 1: custom_function → Daedalus (trigger_build)
+   │  Step 2: custom_function → Sphinx  (execute_script)
+   │
+   ├─→ Daedalus Container (via RabbitMQ)
+   │       └─→ Jenkins/Forgejo/etc.
+   │
+   └─→ Sphinx Container (via RabbitMQ)
+           └─→ LitterBox API → scan → tag payload
 ```
 
-Sphinx downloads the payload from Mythic, uploads it to LitterBox, triggers scans, polls for results, and tags the payload. Daedalus receives the final result.
+This approach works because Mythic natively routes `custom_function` actions to the container named in `container_name` via RabbitMQ. There is no need for Daedalus to proxy the call through GraphQL.
 
-**Method 2: Direct LitterBox API (`method=direct`)**
+**Fallback: Direct LitterBox API**
+
+When Sphinx is not installed, Daedalus's `scan_payload` custom function can call the LitterBox API directly:
 
 ```
 Daedalus                    Mythic GraphQL              LitterBox
@@ -114,7 +113,7 @@ Daedalus                    Mythic GraphQL              LitterBox
    │  fetch risk  ◄──────────────────────────────────────────│
 ```
 
-Daedalus calls the LitterBox API directly. Useful when Sphinx is not installed. Does not create Sphinx-style tags; returns raw risk data.
+This does not create Sphinx-style tags; it returns raw risk data.
 
 ### Verdict Querying (get_verdict)
 
@@ -125,6 +124,21 @@ The `get_verdict` function queries Mythic's tag system for both Sphinx and Daeda
 
 Operators can check both build and scan history for a payload in one call.
 
-### Chained Build and Scan (build_and_scan)
+### Unified Build and Scan (build_and_scan)
 
-The `build_and_scan` workflow chains `trigger_build` and `scan_payload` into a single operation: trigger a CI/CD build, poll for completion, then submit the result to LitterBox for scanning.
+The `build_and_scan` custom function runs the full pipeline in a single function call - no multi-step workflow coordination needed. It triggers a CI/CD build, polls for completion, downloads the built artifact from CI, uploads it to Mythic, and scans it via the LitterBox API directly. This avoids the Mythic limitation where step outputs cannot flow between workflow steps and templates are not resolved.
+
+```
+Daedalus Container (single function call)
+   │
+   ├─ 1. Trigger build on CI/CD (Jenkins, etc.)
+   ├─ 2. Poll until build completes
+   ├─ 3. Tag source payload with build result
+   ├─ 4. Download artifact from CI/CD
+   ├─ 5. Upload artifact to Mythic (REST API)
+   └─ 6. Upload to LitterBox → trigger scans → return risk
+```
+
+### Jenkins First-Run Behavior
+
+Jenkins pipeline jobs discover their parameters from the Jenkinsfile's `parameters {}` block only after the first run. On a fresh job, `buildWithParameters` returns HTTP 400 ("not parameterized"). The Jenkins provider automatically falls back to `/build` (no parameters) for the initial run. Subsequent triggers use `buildWithParameters` normally.

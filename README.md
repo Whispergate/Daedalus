@@ -27,10 +27,10 @@ Set your CI/CD credentials via environment variables or per-workflow in the Myth
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
 | Daedalus Manual Build | `manual` | On-demand build trigger |
-| Daedalus Auto Build | `payload_build_finish` | Auto-rebuild on new payload |
+| Daedalus Auto Build | `payload_build_finish` | Auto build, upload artifact, and scan on new payload |
 | Daedalus Check Build Status | `manual` | Query a running build |
 | Daedalus Download Artifact | `manual` | Pull artifact into Mythic |
-| Daedalus Build and Scan | `manual` | Build then scan via Sphinx/LitterBox |
+| Daedalus Build and Scan | `manual` | Unified: build, download artifact, upload to Mythic, scan via LitterBox |
 | Daedalus Scan Payload | `manual` | Submit payload to LitterBox |
 | Daedalus Get Verdict | `manual` | Retrieve Sphinx + Daedalus tags |
 
@@ -50,12 +50,11 @@ Operator → Daedalus (trigger build) → CI/CD pipeline → artifact
 
 ### Sphinx Integration
 
-Daedalus can invoke Sphinx to scan payloads via LitterBox from Mythic workflows. Two methods are available:
+Daedalus workflows that include scanning call Sphinx's `execute_script` function directly as a workflow step. Mythic routes the call to Sphinx over RabbitMQ - the same mechanism Sphinx's own workflows use. No GraphQL proxy is needed.
 
-- **`sphinx`** (default): Calls Sphinx's `execute_script` function through Mythic's eventing system. Sphinx handles upload, scanning, and payload tagging.
-- **`direct`**: Calls the LitterBox API directly when Sphinx is not installed.
+When Sphinx is not installed, Daedalus's `scan_payload` custom function can call the LitterBox API directly as a fallback.
 
-The **Build and Scan** workflow triggers a CI/CD build, waits for completion, then scans the result. **Get Verdict** retrieves the combined Sphinx scan and Daedalus build tags for a payload.
+The **Build and Scan** workflow triggers a CI/CD build, waits for completion, then hands the payload to Sphinx for scanning. **Get Verdict** retrieves the combined Sphinx scan and Daedalus build tags for a payload.
 
 ### Example Pipelines
 

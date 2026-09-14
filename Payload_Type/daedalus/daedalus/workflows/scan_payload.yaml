@@ -1,13 +1,11 @@
 name: Daedalus Scan Payload
-description: Submit a payload to LitterBox for scanning via Sphinx or direct API
+description: Submit a payload to LitterBox for scanning via Sphinx
 trigger: manual
 trigger_data: {}
 environment:
     PAYLOAD_UUID: ""
     SCAN_TYPE: all
-    SCAN_METHOD: sphinx
-    LITTERBOX_URL: ""
-    EDR_PROFILE: ""
+    LITTERBOX_URL: http://10.5.99.12:1337
     TIMEOUT: "120"
 keywords:
     - daedalus
@@ -20,13 +18,11 @@ steps:
       description: Submit payload to LitterBox for analysis
       action: custom_function
       action_data:
-          container_name: daedalus
-          function_name: scan_payload
+          container_name: sphinx
+          function_name: execute_script
       inputs:
           payload_uuid: "{{env.PAYLOAD_UUID}}"
           mythic_api_token: "{{mythic.apitoken}}"
           litterbox_url: "{{env.LITTERBOX_URL}}"
           scan_type: "{{env.SCAN_TYPE}}"
-          edr_profile: "{{env.EDR_PROFILE}}"
-          method: "{{env.SCAN_METHOD}}"
           timeout: "{{env.TIMEOUT}}"
