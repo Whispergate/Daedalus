@@ -82,7 +82,7 @@ class GiteaProvider(CIProvider):
             if r.status_code not in (200, 201, 204):
                 return BuildResult(
                     provider=self.name, build_id="", status=BuildStatus.FAILURE,
-                    error=f"Dispatch failed: HTTP {r.status_code} — {r.text[:500]}",
+                    error=f"Dispatch failed: HTTP {r.status_code} - {r.text[:500]}",
                 )
 
             await asyncio.sleep(3)

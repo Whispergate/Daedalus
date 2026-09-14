@@ -77,7 +77,7 @@ class GitLabProvider(CIProvider):
             if r.status_code not in (200, 201):
                 return BuildResult(
                     provider=self.name, build_id="", status=BuildStatus.FAILURE,
-                    error=f"Pipeline trigger failed: HTTP {r.status_code} — {r.text[:500]}",
+                    error=f"Pipeline trigger failed: HTTP {r.status_code} - {r.text[:500]}",
                 )
 
             data = r.json()

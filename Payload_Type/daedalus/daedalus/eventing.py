@@ -123,7 +123,7 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
                 )
 
         logger.warning(
-            "Triggering build on %s — job=%s params=%s",
+            "Triggering build on %s - job=%s params=%s",
             provider_name, job, list(build_params.keys()),
         )
         result = await provider.trigger_build(job, build_params)
@@ -142,7 +142,7 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
         if not poll_build:
             return NewCustomEventingMessageResponse(
                 Success=True,
-                Message=f"Build triggered: {provider_name} #{result.build_id} — {result.url}",
+                Message=f"Build triggered: {provider_name} #{result.build_id} - {result.url}",
             )
 
         final = await _poll_build(provider, job, result.build_id, poll_timeout)
@@ -305,7 +305,7 @@ async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingM
             Success=True,
             Message=(
                 f"Artifact downloaded: {len(artifact_bytes)} bytes "
-                f"(no Mythic token — not uploaded)"
+                f"(no Mythic token - not uploaded)"
             ),
         )
 
@@ -477,7 +477,7 @@ async def _scan_direct_litterbox(
         if r.status_code != 200:
             return NewCustomEventingMessageResponse(
                 Success=False,
-                Message=f"LitterBox upload failed: HTTP {r.status_code} — {r.text[:300]}",
+                Message=f"LitterBox upload failed: HTTP {r.status_code} - {r.text[:300]}",
             )
         md5 = r.json()["file_info"]["md5"]
 

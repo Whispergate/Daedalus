@@ -74,7 +74,7 @@ class GitHubProvider(CIProvider):
             if r.status_code not in (200, 204):
                 return BuildResult(
                     provider=self.name, build_id="", status=BuildStatus.FAILURE,
-                    error=f"Dispatch failed: HTTP {r.status_code} — {r.text[:500]}",
+                    error=f"Dispatch failed: HTTP {r.status_code} - {r.text[:500]}",
                 )
 
             await asyncio.sleep(3)
@@ -184,7 +184,7 @@ class GitHubProvider(CIProvider):
             if r.status_code != 200:
                 return f"(log unavailable: HTTP {r.status_code})"
             # GitHub returns a zip of logs; return raw bytes info
-            return f"(log archive: {len(r.content)} bytes — download via artifact)"
+            return f"(log archive: {len(r.content)} bytes - download via artifact)"
 
     def _resolve_repo(self, job: str) -> tuple[str, str]:
         if "/" in job:

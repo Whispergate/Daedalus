@@ -45,14 +45,22 @@ As of v3.3.36, workflows have to be added manually due to a bug. To do so, go to
 
 ### Environment Variables
 
-Set these in the Daedalus container's environment (via Mythic's `.env` or `docker-compose` overrides), or pass them per-workflow in Mythic's Eventing UI:
+Set these in Mythic's Eventing UI:
+
+![Editing Environment Variables](image-1.png)
+![Environment Variables](image-2.png)
+
+The workflows which need to have their environment variables set are:
+
+- Daedalus Scan Payload
+- Daedalus Build and Scan
 
 #### General
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DAEDALUS_PROVIDER` | `jenkins` | Default CI provider |
-| `DAEDALUS_JOB` | — | Default job/pipeline name |
+| `DAEDALUS_JOB` | - | Default job/pipeline name |
 
 #### Jenkins
 

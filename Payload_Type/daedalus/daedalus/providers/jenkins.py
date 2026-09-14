@@ -60,7 +60,7 @@ class JenkinsProvider(CIProvider):
             if r.status_code not in (200, 201, 302):
                 return BuildResult(
                     provider=self.name, build_id="", status=BuildStatus.FAILURE,
-                    error=f"Trigger failed: HTTP {r.status_code} — {r.text[:500]}",
+                    error=f"Trigger failed: HTTP {r.status_code} - {r.text[:500]}",
                 )
 
             queue_url = r.headers.get("Location", "")
