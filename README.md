@@ -10,6 +10,8 @@ Daedalus lets operators trigger builds, poll for completion, download artifacts,
 - **GitLab CI/CD**: Pipeline API (trigger, status, job artifacts, trace logs)
 - **Gitea Actions**: Workflow dispatch API (Gitea Acts runner)
 
+![Daedalus Workflow](documentation-payload/daedalus/DaedalusWorkflow.png)
+
 ## Quick Start
 
 ```bash
