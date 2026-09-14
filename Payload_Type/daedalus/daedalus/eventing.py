@@ -966,6 +966,20 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
                     "build_and_scan: tagged file %s (filemeta_id=%d) with %s",
                     uploaded_file_id, filemeta_int_id, tag_label,
                 )
+
+                # Also tag the source payload with the scan verdict
+                if payload_int_id:
+                    await _gql(auth_headers, _INSERT_TAG, {
+                        "tagtype_id": tagtype_id,
+                        "payload_id": payload_int_id,
+                        "source": "daedalus",
+                        "url": f"{litterbox_url}/results/info/{md5}",
+                        "data": scan_tag_data,
+                    })
+                    logger.warning(
+                        "build_and_scan: tagged payload (id=%d) with %s",
+                        payload_int_id, tag_label,
+                    )
             else:
                 logger.warning("build_and_scan: filemeta not found for %s, skipping tag", uploaded_file_id)
         except Exception as tag_exc:
