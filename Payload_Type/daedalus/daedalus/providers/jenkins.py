@@ -68,6 +68,17 @@ class JenkinsProvider(CIProvider):
                 r.status_code, r.headers.get("Location", "(none)"),
             )
 
+            if r.status_code == 400 and "not parameterized" in r.text:
+                logger.warning(
+                    "Job not parameterized yet (first run?), retrying with /build"
+                )
+                endpoint = f"{self.base_url}/{job_path}/build"
+                r = await client.post(endpoint)
+                logger.warning(
+                    "Jenkins /build fallback: HTTP %d, Location=%s",
+                    r.status_code, r.headers.get("Location", "(none)"),
+                )
+
             if r.status_code not in (200, 201, 302):
                 return BuildResult(
                     provider=self.name, build_id="", status=BuildStatus.FAILURE,
