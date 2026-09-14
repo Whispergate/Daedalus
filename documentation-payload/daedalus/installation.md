@@ -37,6 +37,12 @@ Edit `Payload_Type/daedalus/rabbitmq_config.json` before building:
 
 The `rabbitmq_password` must match your Mythic installation's RabbitMQ password (found in your Mythic `.env` file as `RABBITMQ_PASSWORD`).
 
+### Eventing Workflows
+
+As of v3.3.36, workflows have to be added manually due to a bug. To do so, go to each file in `Payload_Type/daedalus/daedalus/workflows/*.yaml` and upload them to the eventing page
+
+![Eventing Upload](image.png)
+
 ### Environment Variables
 
 Set these in the Daedalus container's environment (via Mythic's `.env` or `docker-compose` overrides), or pass them per-workflow in Mythic's Eventing UI:
