@@ -214,6 +214,27 @@ mutation DaedalusInsertTag(
 }
 """
 
+_INSERT_FILE_TAG = """
+mutation DaedalusInsertFileTag(
+    $tagtype_id: Int!, $filemeta_id: Int!,
+    $source: String!, $url: String!, $data: jsonb!
+) {
+    insert_tag_one(object: {
+        tagtype_id: $tagtype_id,
+        filemeta_id: $filemeta_id,
+        source: $source,
+        url: $url,
+        data: $data
+    }) { id }
+}
+"""
+
+_QUERY_FILEMETA = """
+query DaedalusFilemeta($agent_file_id: String!) {
+    filemeta(where: {agent_file_id: {_eq: $agent_file_id}}) { id }
+}
+"""
+
 async def _upload_file(headers: dict, filename: str, contents: bytes) -> str:
     """Upload a file to Mythic via the REST webhook. Returns agent_file_id."""
     async with httpx.AsyncClient(verify=False, timeout=30) as client:
@@ -799,11 +820,24 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
                 f"No artifacts found to scan"
             )
 
+        _BINARY_EXTS = (".exe", ".dll", ".bin", ".o", ".so", ".elf", ".cpl", ".sys")
+        _SKIP_SUFFIXES = (".sha256", ".sha1", ".md5", ".sig", ".asc", ".json", ".txt", ".log")
+        logger.warning(
+            "build_and_scan: artifacts available: %s",
+            [a.get("relativePath") or a.get("fileName") for a in artifacts],
+        )
+
         if artifact_name:
             target = next((a for a in artifacts if a.get("relativePath") == artifact_name
                           or a.get("fileName") == artifact_name), None)
         else:
-            target = artifacts[0]
+            fname = lambda a: (a.get("fileName") or a.get("relativePath", "")).lower()
+            binary = [a for a in artifacts if fname(a).endswith(_BINARY_EXTS)]
+            if binary:
+                target = binary[0]
+            else:
+                non_meta = [a for a in artifacts if not fname(a).endswith(_SKIP_SUFFIXES)]
+                target = non_meta[0] if non_meta else artifacts[0]
 
         if not target:
             return _err(f"Artifact {artifact_name!r} not found in build #{final.build_id}")
@@ -873,23 +907,79 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
 
         await asyncio.sleep(min(poll_timeout, 10))
 
+        risk_data = {}
         async with httpx.AsyncClient(timeout=10) as client:
             try:
                 r = await client.get(f"{litterbox_url}/api/results/risk/{md5}")
                 if r.status_code == 200:
-                    risk = r.json()
-                    level = risk.get("risk_level", "unknown")
-                    score = risk.get("risk_score", "N/A")
-                    return _ok(
-                        f"Build SUCCESS: {provider_name} #{final.build_id} "
-                        f"(duration={final.duration_seconds:.0f}s) | "
-                        f"Artifact: {upload_filename} ({len(artifact_bytes)} bytes, "
-                        f"file_id={uploaded_file_id}) | "
-                        f"LitterBox: {level} risk (score={score}) | "
-                        f"Results: {litterbox_url}/results/info/{md5}"
-                    )
+                    risk_data = r.json()
             except httpx.HTTPError:
                 pass
+
+        level = (risk_data.get("risk_level") or "unknown").lower()
+        score = risk_data.get("risk_score", "N/A")
+
+        # --- Tag the uploaded artifact file with scan verdict ---
+        _SCAN_VERDICT_MAP = {
+            "low":      ("Daedalus: Scan Clean",         "#4CAF50"),
+            "medium":   ("Daedalus: Scan Medium Risk",   "#FF9800"),
+            "high":     ("Daedalus: Scan High Risk",     "#f44336"),
+            "critical": ("Daedalus: Scan Critical Risk", "#9C27B0"),
+        }
+        tag_label, tag_color = _SCAN_VERDICT_MAP.get(level, ("Daedalus: Scan Unknown", "#9E9E9E"))
+
+        try:
+            fm_data = await _gql(auth_headers, _QUERY_FILEMETA, {"agent_file_id": uploaded_file_id})
+            fm_rows = fm_data.get("filemeta", [])
+            filemeta_int_id = fm_rows[0]["id"] if fm_rows else None
+
+            if filemeta_int_id:
+                data = await _gql(auth_headers, _QUERY_TAGTYPE, {"name": tag_label})
+                tagtypes = data.get("tagtype", [])
+                if tagtypes:
+                    tagtype_id = tagtypes[0]["id"]
+                else:
+                    result = await _gql(auth_headers, _INSERT_TAGTYPE, {
+                        "name": tag_label, "color": tag_color,
+                        "description": "Daedalus LitterBox scan verdict",
+                    })
+                    tagtype_id = result["insert_tagtype_one"]["id"]
+
+                scan_tag_data = {
+                    "risk_score": risk_data.get("risk_score"),
+                    "risk_level": risk_data.get("risk_level"),
+                    "risk_factors": risk_data.get("risk_factors", []),
+                    "hash": md5,
+                    "scan_type": scan_type,
+                    "artifact_file_id": uploaded_file_id,
+                    "artifact_name": upload_filename,
+                    "results_url": f"{litterbox_url}/results/info/{md5}",
+                }
+                await _gql(auth_headers, _INSERT_FILE_TAG, {
+                    "tagtype_id": tagtype_id,
+                    "filemeta_id": filemeta_int_id,
+                    "source": "daedalus",
+                    "url": f"{litterbox_url}/results/info/{md5}",
+                    "data": scan_tag_data,
+                })
+                logger.warning(
+                    "build_and_scan: tagged file %s (filemeta_id=%d) with %s",
+                    uploaded_file_id, filemeta_int_id, tag_label,
+                )
+            else:
+                logger.warning("build_and_scan: filemeta not found for %s, skipping tag", uploaded_file_id)
+        except Exception as tag_exc:
+            logger.warning("build_and_scan: scan tagging failed: %r", tag_exc)
+
+        if risk_data:
+            return _ok(
+                f"Build SUCCESS: {provider_name} #{final.build_id} "
+                f"(duration={final.duration_seconds:.0f}s) | "
+                f"Artifact: {upload_filename} ({len(artifact_bytes)} bytes, "
+                f"file_id={uploaded_file_id}) | "
+                f"LitterBox: {level} risk (score={score}) | "
+                f"Results: {litterbox_url}/results/info/{md5}"
+            )
 
         return _ok(
             f"Build SUCCESS: {provider_name} #{final.build_id} "
