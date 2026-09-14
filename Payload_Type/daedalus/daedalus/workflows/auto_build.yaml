@@ -6,6 +6,9 @@ trigger_data:
 environment:
     PROVIDER: jenkins
     JOB: maas-loader-build
+    JENKINS_URL: http://10.5.99.3:8080
+    JENKINS_USER: admin
+    JENKINS_TOKEN: admin
     POLL: "true"
     TIMEOUT: "300"
 keywords:

@@ -4,6 +4,7 @@ import asyncio
 import base64
 import logging
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -22,6 +23,131 @@ from mythic_container.SharedClasses import (
 from daedalus.providers import BuildStatus, get_provider
 
 logger = logging.getLogger("daedalus")
+
+_UNRESOLVED_TEMPLATE = re.compile(r"^\{\{.*\}\}$")
+
+_STARTUP_API_TOKEN: str = ""
+_YAML_ENV_DEFAULTS: dict[str, str] = {}
+
+
+def _load_yaml_env_defaults() -> dict[str, str]:
+    """Merge all workflow YAML environment blocks into one defaults dict.
+
+    Called once at container startup. Values from the YAML files serve as
+    last-resort defaults when Mythic fails to resolve templates and doesn't
+    pass the environment block through msg.Environment.
+    """
+    import yaml
+
+    merged: dict[str, str] = {}
+    workflows_dir = Path(__file__).parent / "workflows"
+    for yml in sorted(workflows_dir.glob("*.yaml")):
+        try:
+            doc = yaml.safe_load(yml.read_text())
+            env_block = doc.get("environment") or {}
+            for k, v in env_block.items():
+                if v and str(v) and k not in merged:
+                    merged[k] = str(v)
+        except Exception:
+            pass
+    return merged
+
+
+def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
+    """Build a resolved inputs dict from the message.
+
+    Mythic should interpolate ``{{env.VAR}}``, ``{{trigger.*}}``, and
+    ``{{mythic.*}}`` before the value reaches a custom function.  When it
+    doesn't (known bug in < v4.0), the literal template string arrives
+    instead.
+
+    This function:
+      1. Strips unresolved ``{{...}}`` template strings to empty.
+      2. Fills empty values from ``msg.Environment`` (the workflow's env block).
+      3. Injects the startup API token when ``mythic_api_token`` is missing.
+      4. Pulls ``payload_uuid`` from ``msg.ActionData`` for trigger-sourced events.
+    """
+    raw = msg.Inputs or {}
+    env = msg.Environment or {}
+    action = msg.ActionData or {}
+
+    # Map from input keys to their corresponding env-block keys.
+    _INPUT_TO_ENV = {
+        "provider": "PROVIDER",
+        "job": "JOB",
+        "poll": "POLL",
+        "timeout": "TIMEOUT",
+        "language": "LANGUAGE",
+        "output_format": "OUTPUT_FORMAT",
+        "obfuscation": "OBFUSCATION",
+        "payload_uuid": "PAYLOAD_UUID",
+        "litterbox_url": "LITTERBOX_URL",
+        "scan_type": "SCAN_TYPE",
+        "edr_profile": "EDR_PROFILE",
+        "method": "SCAN_METHOD",
+        "build_id": "BUILD_ID",
+        "artifact_name": "ARTIFACT_NAME",
+        "include_log": "INCLUDE_LOG",
+        # Provider connection details (keyed with provider prefix so
+        # _provider_kwargs_from_inputs finds them via inputs.get("jenkins_url") etc.)
+        "jenkins_url": "JENKINS_URL",
+        "jenkins_user": "JENKINS_USER",
+        "jenkins_token": "JENKINS_TOKEN",
+        "forgejo_url": "FORGEJO_URL",
+        "forgejo_token": "FORGEJO_TOKEN",
+        "forgejo_owner": "FORGEJO_OWNER",
+        "forgejo_repo": "FORGEJO_REPO",
+        "github_token": "GITHUB_TOKEN",
+        "github_owner": "GITHUB_OWNER",
+        "github_repo": "GITHUB_REPO",
+        "github_api_base": "GITHUB_API_BASE",
+        "gitlab_url": "GITLAB_URL",
+        "gitlab_token": "GITLAB_TOKEN",
+        "gitlab_project_id": "GITLAB_PROJECT_ID",
+        "gitea_url": "GITEA_URL",
+        "gitea_token": "GITEA_TOKEN",
+        "gitea_owner": "GITEA_OWNER",
+        "gitea_repo": "GITEA_REPO",
+    }
+
+    out: dict = {}
+    for key, val in raw.items():
+        if isinstance(val, str) and _UNRESOLVED_TEMPLATE.match(val):
+            out[key] = ""
+        else:
+            out[key] = val
+
+    # Fill blanks from the workflow environment block, then from YAML defaults.
+    for input_key, env_key in _INPUT_TO_ENV.items():
+        if not out.get(input_key):
+            val = env.get(env_key) or _YAML_ENV_DEFAULTS.get(env_key) or ""
+            if val:
+                out[input_key] = val
+
+    # API token: prefer resolved input, then startup token.
+    if not out.get("mythic_api_token") and _STARTUP_API_TOKEN:
+        out["mythic_api_token"] = _STARTUP_API_TOKEN
+
+    # Trigger-sourced payload UUID (payload_build_finish events).
+    if not out.get("payload_uuid"):
+        trigger_uuid = (
+            action.get("payload_uuid")
+            or action.get("uuid")
+            or action.get("payload", {}).get("uuid", "")
+        )
+        if trigger_uuid:
+            out["payload_uuid"] = trigger_uuid
+
+    return out
+
+
+def _ok(message: str, **extra) -> NewCustomEventingMessageResponse:
+    return NewCustomEventingMessageResponse(Success=True, StdOut=message, **extra)
+
+
+def _err(message: str, **extra) -> NewCustomEventingMessageResponse:
+    return NewCustomEventingMessageResponse(Success=False, StdErr=message, **extra)
+
 
 MYTHIC_GRAPHQL = os.getenv("MYTHIC_GRAPHQL", "http://mythic_graphql:8080/v1/graphql")
 MYTHIC_SERVER = os.getenv("MYTHIC_SERVER", "http://mythic_server:17443")
@@ -87,7 +213,7 @@ mutation DaedalusUploadFile($filename: String!, $contents: String!) {
 
 async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessageResponse:
     try:
-        inputs = msg.Inputs
+        inputs = _resolve_inputs(msg)
         provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
         job = inputs.get("job") or os.getenv("DAEDALUS_JOB", "")
         mythic_token = inputs.get("mythic_api_token", "")
@@ -100,9 +226,7 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
             poll_timeout = 300
 
         if not job:
-            return NewCustomEventingMessageResponse(
-                Success=False, Message="'job' input required (CI job/pipeline name)",
-            )
+            return _err("'job' input required (CI job/pipeline name)")
 
         build_params = _extract_build_params(inputs)
         provider_kwargs = _provider_kwargs_from_inputs(inputs, provider_name)
@@ -129,21 +253,13 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
         result = await provider.trigger_build(job, build_params)
 
         if result.status == BuildStatus.FAILURE:
-            return NewCustomEventingMessageResponse(
-                Success=False, Message=f"Build trigger failed: {result.error}",
-            )
+            return _err(f"Build trigger failed: {result.error}")
 
         if not result.build_id:
-            return NewCustomEventingMessageResponse(
-                Success=True,
-                Message=f"Build dispatched on {provider_name} (no build ID resolved yet). URL: {result.url}",
-            )
+            return _ok(f"Build dispatched on {provider_name} (no build ID resolved yet). URL: {result.url}")
 
         if not poll_build:
-            return NewCustomEventingMessageResponse(
-                Success=True,
-                Message=f"Build triggered: {provider_name} #{result.build_id} - {result.url}",
-            )
+            return _ok(f"Build triggered: {provider_name} #{result.build_id} - {result.url}")
 
         final = await _poll_build(provider, job, result.build_id, poll_timeout)
 
@@ -159,14 +275,14 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
             f"URL: {final.url}" if final.url else "",
             f"Error: {final.error}" if final.error else "",
         ]
-        return NewCustomEventingMessageResponse(
-            Success=final.status == BuildStatus.SUCCESS,
-            Message=" | ".join(p for p in msg_parts if p),
-        )
+        summary = " | ".join(p for p in msg_parts if p)
+        if final.status == BuildStatus.SUCCESS:
+            return _ok(summary)
+        return _err(summary)
 
     except Exception as exc:
         logger.exception("Daedalus trigger_build failed")
-        return NewCustomEventingMessageResponse(Success=False, Message=f"Daedalus error: {exc}")
+        return _err(f"Daedalus error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -175,15 +291,13 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
 
 async def check_status(msg: NewCustomEventingMessage) -> NewCustomEventingMessageResponse:
     try:
-        inputs = msg.Inputs
+        inputs = _resolve_inputs(msg)
         provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
         job = inputs.get("job") or os.getenv("DAEDALUS_JOB", "")
         build_id = inputs.get("build_id", "").strip()
 
         if not job or not build_id:
-            return NewCustomEventingMessageResponse(
-                Success=False, Message="'job' and 'build_id' inputs required",
-            )
+            return _err("'job' and 'build_id' inputs required")
 
         provider_kwargs = _provider_kwargs_from_inputs(inputs, provider_name)
         provider = get_provider(provider_name, **provider_kwargs)
@@ -205,11 +319,11 @@ async def check_status(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
         if log_snippet:
             message += f"\n\n--- Log tail ---\n{log_snippet}"
 
-        return NewCustomEventingMessageResponse(Success=True, Message=message)
+        return _ok(message)
 
     except Exception as exc:
         logger.exception("Daedalus check_status failed")
-        return NewCustomEventingMessageResponse(Success=False, Message=f"Daedalus error: {exc}")
+        return _err(f"Daedalus error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +332,7 @@ async def check_status(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
 
 async def list_configs(msg: NewCustomEventingMessage) -> NewCustomEventingMessageResponse:
     try:
-        inputs = msg.Inputs
+        inputs = _resolve_inputs(msg)
         provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
 
         provider_kwargs = _provider_kwargs_from_inputs(inputs, provider_name)
@@ -226,21 +340,18 @@ async def list_configs(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
 
         jobs = await provider.list_jobs()
         if not jobs:
-            return NewCustomEventingMessageResponse(
-                Success=True,
-                Message=f"No jobs found on {provider_name} (or not accessible)",
-            )
+            return _ok(f"No jobs found on {provider_name} (or not accessible)")
 
         lines = [f"Available jobs on {provider_name}:"]
         for j in jobs:
             status = j.get("status") or j.get("conclusion") or ""
             lines.append(f"  - {j['name']} [{status}] {j.get('url', '')}")
 
-        return NewCustomEventingMessageResponse(Success=True, Message="\n".join(lines))
+        return _ok("\n".join(lines))
 
     except Exception as exc:
         logger.exception("Daedalus list_configs failed")
-        return NewCustomEventingMessageResponse(Success=False, Message=f"Daedalus error: {exc}")
+        return _err(f"Daedalus error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +360,7 @@ async def list_configs(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
 
 async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingMessageResponse:
     try:
-        inputs = msg.Inputs
+        inputs = _resolve_inputs(msg)
         provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
         job = inputs.get("job") or os.getenv("DAEDALUS_JOB", "")
         build_id = inputs.get("build_id", "").strip()
@@ -258,9 +369,7 @@ async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingM
         payload_uuid = inputs.get("payload_uuid", "").strip()
 
         if not job or not build_id:
-            return NewCustomEventingMessageResponse(
-                Success=False, Message="'job' and 'build_id' inputs required",
-            )
+            return _err("'job' and 'build_id' inputs required")
 
         provider_kwargs = _provider_kwargs_from_inputs(inputs, provider_name)
         provider = get_provider(provider_name, **provider_kwargs)
@@ -293,25 +402,19 @@ async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingM
                         },
                     )
 
-            return NewCustomEventingMessageResponse(
-                Success=True,
-                Message=(
-                    f"Artifact downloaded ({len(artifact_bytes)} bytes) "
-                    f"and uploaded to Mythic (file_id={file_id})"
-                ),
+            return _ok(
+                f"Artifact downloaded ({len(artifact_bytes)} bytes) "
+                f"and uploaded to Mythic (file_id={file_id})"
             )
 
-        return NewCustomEventingMessageResponse(
-            Success=True,
-            Message=(
-                f"Artifact downloaded: {len(artifact_bytes)} bytes "
-                f"(no Mythic token - not uploaded)"
-            ),
+        return _ok(
+            f"Artifact downloaded: {len(artifact_bytes)} bytes "
+            f"(no Mythic token - not uploaded)"
         )
 
     except Exception as exc:
         logger.exception("Daedalus download_artifact failed")
-        return NewCustomEventingMessageResponse(Success=False, Message=f"Daedalus error: {exc}")
+        return _err(f"Daedalus error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +449,7 @@ query DaedalusTags($payload_id: Int!, $source: String!) {
 
 async def scan_payload(msg: NewCustomEventingMessage) -> NewCustomEventingMessageResponse:
     try:
-        inputs = msg.Inputs
+        inputs = _resolve_inputs(msg)
         payload_uuid = inputs.get("payload_uuid", "").strip()
         mythic_token = inputs.get("mythic_api_token", "")
         litterbox_url = inputs.get("litterbox_url") or os.getenv("LITTERBOX_URL", "")
@@ -356,13 +459,9 @@ async def scan_payload(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
         method = inputs.get("method", "sphinx").lower()
 
         if not payload_uuid:
-            return NewCustomEventingMessageResponse(
-                Success=False, Message="'payload_uuid' input required",
-            )
+            return _err("'payload_uuid' input required")
         if not mythic_token:
-            return NewCustomEventingMessageResponse(
-                Success=False, Message="'mythic_api_token' input required",
-            )
+            return _err("'mythic_api_token' input required")
 
         auth_headers = {"Authorization": f"Bearer {mythic_token}"}
 
@@ -377,18 +476,13 @@ async def scan_payload(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
                 scan_type, edr_profile, int(timeout),
             )
         else:
-            return NewCustomEventingMessageResponse(
-                Success=False,
-                Message=f"Unknown scan method: {method!r}. Use 'sphinx' or 'direct'",
-            )
+            return _err(f"Unknown scan method: {method!r}. Use 'sphinx' or 'direct'")
 
         return result
 
     except Exception as exc:
         logger.exception("Daedalus scan_payload failed")
-        return NewCustomEventingMessageResponse(
-            Success=False, Message=f"Daedalus scan error: {exc}",
-        )
+        return _err(f"Daedalus scan error: {exc}")
 
 
 async def _scan_via_sphinx(
@@ -422,24 +516,15 @@ async def _scan_via_sphinx(
         error = result.get("error", "")
 
         if status == "success":
-            return NewCustomEventingMessageResponse(
-                Success=True,
-                Message=f"Sphinx scan complete: {output}",
-            )
+            return _ok(f"Sphinx scan complete: {output}")
         else:
-            return NewCustomEventingMessageResponse(
-                Success=False,
-                Message=f"Sphinx scan failed: {error or output or status}",
-            )
+            return _err(f"Sphinx scan failed: {error or output or status}")
 
     except RuntimeError as exc:
         if "not found" in str(exc).lower() or "container" in str(exc).lower():
-            return NewCustomEventingMessageResponse(
-                Success=False,
-                Message=(
-                    "Sphinx container not found. "
-                    "Install Sphinx or use method='direct' with LITTERBOX_URL set."
-                ),
+            return _err(
+                "Sphinx container not found. "
+                "Install Sphinx or use method='direct' with LITTERBOX_URL set."
             )
         raise
 
@@ -453,19 +538,13 @@ async def _scan_direct_litterbox(
     timeout: int,
 ) -> NewCustomEventingMessageResponse:
     if not litterbox_url:
-        return NewCustomEventingMessageResponse(
-            Success=False,
-            Message="'litterbox_url' required for direct scan (or set LITTERBOX_URL)",
-        )
+        return _err("'litterbox_url' required for direct scan (or set LITTERBOX_URL)")
 
     litterbox_url = litterbox_url.rstrip("/")
     payload_int_id, agent_file_id, filename = await _query_payload(headers, payload_uuid)
 
     if not agent_file_id:
-        return NewCustomEventingMessageResponse(
-            Success=False,
-            Message=f"Payload {payload_uuid!r} not found in Mythic",
-        )
+        return _err(f"Payload {payload_uuid!r} not found in Mythic")
 
     payload_bytes = await _download_file(headers, agent_file_id)
 
@@ -475,10 +554,7 @@ async def _scan_direct_litterbox(
             files={"file": (filename, payload_bytes, "application/octet-stream")},
         )
         if r.status_code != 200:
-            return NewCustomEventingMessageResponse(
-                Success=False,
-                Message=f"LitterBox upload failed: HTTP {r.status_code} - {r.text[:300]}",
-            )
+            return _err(f"LitterBox upload failed: HTTP {r.status_code} - {r.text[:300]}")
         md5 = r.json()["file_info"]["md5"]
 
     async with httpx.AsyncClient(timeout=120) as client:
@@ -505,43 +581,31 @@ async def _scan_direct_litterbox(
                 risk = r.json()
                 level = risk.get("risk_level", "unknown")
                 score = risk.get("risk_score", "N/A")
-                return NewCustomEventingMessageResponse(
-                    Success=True,
-                    Message=(
-                        f"LitterBox scan complete: {level} risk "
-                        f"(score={score}) | hash={md5} | "
-                        f"results: {litterbox_url}/results/info/{md5}"
-                    ),
+                return _ok(
+                    f"LitterBox scan complete: {level} risk "
+                    f"(score={score}) | hash={md5} | "
+                    f"results: {litterbox_url}/results/info/{md5}"
                 )
         except httpx.HTTPError:
             pass
 
-    return NewCustomEventingMessageResponse(
-        Success=True,
-        Message=f"Scan triggered on LitterBox (md5={md5}). Results may still be processing.",
-    )
+    return _ok(f"Scan triggered on LitterBox (md5={md5}). Results may still be processing.")
 
 
 async def get_verdict(msg: NewCustomEventingMessage) -> NewCustomEventingMessageResponse:
     try:
-        inputs = msg.Inputs
+        inputs = _resolve_inputs(msg)
         payload_uuid = inputs.get("payload_uuid", "").strip()
         mythic_token = inputs.get("mythic_api_token", "")
 
         if not payload_uuid or not mythic_token:
-            return NewCustomEventingMessageResponse(
-                Success=False,
-                Message="'payload_uuid' and 'mythic_api_token' required",
-            )
+            return _err("'payload_uuid' and 'mythic_api_token' required")
 
         auth_headers = {"Authorization": f"Bearer {mythic_token}"}
         payload_int_id, _, _ = await _query_payload(auth_headers, payload_uuid)
 
         if not payload_int_id:
-            return NewCustomEventingMessageResponse(
-                Success=False,
-                Message=f"Payload {payload_uuid!r} not found",
-            )
+            return _err(f"Payload {payload_uuid!r} not found")
 
         sphinx_tags = await _gql(auth_headers, _QUERY_TAGS, {
             "payload_id": payload_int_id,
@@ -590,15 +654,11 @@ async def get_verdict(msg: NewCustomEventingMessage) -> NewCustomEventingMessage
             if dt_data.get("url"):
                 lines.append(f"  URL: {dt_data['url']}")
 
-        return NewCustomEventingMessageResponse(
-            Success=True, Message="\n".join(lines),
-        )
+        return _ok("\n".join(lines))
 
     except Exception as exc:
         logger.exception("Daedalus get_verdict failed")
-        return NewCustomEventingMessageResponse(
-            Success=False, Message=f"Daedalus error: {exc}",
-        )
+        return _err(f"Daedalus error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -950,6 +1010,10 @@ class DaedalusEventing(Eventing):
     async def on_container_start(
         self, message: ContainerOnStartMessage,
     ) -> ContainerOnStartMessageResponse:
+        global _STARTUP_API_TOKEN, _YAML_ENV_DEFAULTS
+        _YAML_ENV_DEFAULTS = _load_yaml_env_defaults()
+        logger.warning("Loaded YAML env defaults: %s", list(_YAML_ENV_DEFAULTS.keys()))
         if message.APIToken:
+            _STARTUP_API_TOKEN = message.APIToken
             await _register_workflows(message.APIToken)
         return ContainerOnStartMessageResponse(ContainerName=self.name)
