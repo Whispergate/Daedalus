@@ -798,10 +798,20 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
         )
 
         if final.status != BuildStatus.SUCCESS:
+            if payload_int_id:
+                await _tag_payload_with_build(
+                    auth_headers, payload_int_id, provider_name, job, final,
+                )
             status_label = final.status.value.upper()
             return _err(
                 f"Build {status_label}: {provider_name} #{final.build_id}"
                 + (f" | Error: {final.error}" if final.error else "")
+            )
+
+        # --- Tag source payload with build result ---
+        if payload_int_id:
+            await _tag_payload_with_build(
+                auth_headers, payload_int_id, provider_name, job, final,
             )
 
         # --- Phase 2: Download artifact from CI and upload to Mythic ---
@@ -810,10 +820,6 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
         artifacts = await provider.list_artifacts(job, final.build_id)
         if not artifacts:
             logger.warning("build_and_scan: no artifacts found for build #%s", final.build_id)
-            if payload_int_id:
-                await _tag_payload_with_build(
-                    auth_headers, payload_int_id, provider_name, job, final,
-                )
             return _ok(
                 f"Build SUCCESS: {provider_name} #{final.build_id} "
                 f"(duration={final.duration_seconds:.0f}s) | "
@@ -853,15 +859,6 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
             "build_and_scan: uploaded to Mythic as %s (file_id=%s)",
             upload_filename, uploaded_file_id,
         )
-
-        if payload_int_id:
-            await _tag_payload_with_build(
-                auth_headers, payload_int_id, provider_name, job, final,
-                extra_data={
-                    "artifact_file_id": uploaded_file_id,
-                    "artifact_name": upload_filename,
-                },
-            )
 
         # --- Phase 3: Scan the artifact via LitterBox ---
         if not litterbox_url:
