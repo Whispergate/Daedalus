@@ -110,23 +110,35 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         "gitea_repo": "GITEA_REPO",
     }
 
+    unresolved = []
     out: dict = {}
     for key, val in raw.items():
         if isinstance(val, str) and _UNRESOLVED_TEMPLATE.match(val):
+            unresolved.append(key)
             out[key] = ""
         else:
             out[key] = val
 
+    if unresolved:
+        logger.warning("Unresolved templates cleared: %s", unresolved)
+
     # Fill blanks from the workflow environment block, then from YAML defaults.
+    filled = []
     for input_key, env_key in _INPUT_TO_ENV.items():
         if not out.get(input_key):
             val = env.get(env_key) or _YAML_ENV_DEFAULTS.get(env_key) or ""
             if val:
                 out[input_key] = val
+                source = "env" if env.get(env_key) else "yaml"
+                filled.append(f"{input_key}={env_key}({source})")
+
+    if filled:
+        logger.warning("Inputs filled from defaults: %s", filled)
 
     # API token: prefer resolved input, then startup token.
     if not out.get("mythic_api_token") and _STARTUP_API_TOKEN:
         out["mythic_api_token"] = _STARTUP_API_TOKEN
+        logger.warning("Using startup API token as fallback")
 
     # Trigger-sourced payload UUID (payload_build_finish events).
     if not out.get("payload_uuid"):
@@ -137,7 +149,13 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         )
         if trigger_uuid:
             out["payload_uuid"] = trigger_uuid
+            logger.warning("Payload UUID from trigger ActionData: %s", trigger_uuid)
 
+    logger.warning(
+        "Resolved inputs: %s",
+        {k: (v[:30] + "..." if isinstance(v, str) and len(v) > 30 else v)
+         for k, v in out.items() if v},
+    )
     return out
 
 
@@ -216,6 +234,7 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
         inputs = _resolve_inputs(msg)
         provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
         job = inputs.get("job") or os.getenv("DAEDALUS_JOB", "")
+        language = inputs.get("language", "").lower().strip()
         mythic_token = inputs.get("mythic_api_token", "")
         payload_uuid = inputs.get("payload_uuid", "").strip()
         poll_build = inputs.get("poll", "true").lower() in ("true", "1", "yes")
@@ -224,6 +243,10 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
             poll_timeout = int(raw_timeout)
         except (ValueError, TypeError):
             poll_timeout = 300
+
+        if not job and language:
+            job = f"loader-{language}"
+            logger.warning("Job auto-resolved from language %r → %s", language, job)
 
         if not job:
             return _err("'job' input required (CI job/pipeline name)")
@@ -247,10 +270,16 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
                 )
 
         logger.warning(
-            "Triggering build on %s - job=%s params=%s",
+            "Triggering build on %s - job=%s params=%s provider_kwargs=%s",
             provider_name, job, list(build_params.keys()),
+            {k: (v[:20] + "..." if isinstance(v, str) and len(v) > 20 else v)
+             for k, v in provider_kwargs.items()},
         )
         result = await provider.trigger_build(job, build_params)
+        logger.warning(
+            "Build trigger result: status=%s build_id=%s url=%s error=%s",
+            result.status.value, result.build_id, result.url, result.error,
+        )
 
         if result.status == BuildStatus.FAILURE:
             return _err(f"Build trigger failed: {result.error}")
@@ -261,9 +290,18 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
         if not poll_build:
             return _ok(f"Build triggered: {provider_name} #{result.build_id} - {result.url}")
 
+        logger.warning(
+            "Polling build %s #%s (timeout=%ds)", provider_name, result.build_id, poll_timeout,
+        )
         final = await _poll_build(provider, job, result.build_id, poll_timeout)
+        logger.warning(
+            "Build poll complete: status=%s build_id=%s duration=%.0fs error=%s",
+            final.status.value, final.build_id,
+            final.duration_seconds or 0, final.error,
+        )
 
         if final.status == BuildStatus.SUCCESS and payload_int_id and auth_headers:
+            logger.warning("Tagging payload %d with build result", payload_int_id)
             await _tag_payload_with_build(
                 auth_headers, payload_int_id, provider_name, job, final,
             )
@@ -294,10 +332,15 @@ async def check_status(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
         inputs = _resolve_inputs(msg)
         provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
         job = inputs.get("job") or os.getenv("DAEDALUS_JOB", "")
+        language = inputs.get("language", "").lower().strip()
         build_id = inputs.get("build_id", "").strip()
 
+        if not job and language:
+            job = f"loader-{language}"
+            logger.warning("Job auto-resolved from language %r → %s", language, job)
+
         if not job or not build_id:
-            return _err("'job' and 'build_id' inputs required")
+            return _err("'job' (or 'language') and 'build_id' inputs required")
 
         provider_kwargs = _provider_kwargs_from_inputs(inputs, provider_name)
         provider = get_provider(provider_name, **provider_kwargs)
@@ -363,13 +406,18 @@ async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingM
         inputs = _resolve_inputs(msg)
         provider_name = (inputs.get("provider") or os.getenv("DAEDALUS_PROVIDER", "jenkins")).lower()
         job = inputs.get("job") or os.getenv("DAEDALUS_JOB", "")
+        language = inputs.get("language", "").lower().strip()
         build_id = inputs.get("build_id", "").strip()
         artifact_name = inputs.get("artifact_name", "").strip()
         mythic_token = inputs.get("mythic_api_token", "")
         payload_uuid = inputs.get("payload_uuid", "").strip()
 
+        if not job and language:
+            job = f"loader-{language}"
+            logger.warning("Job auto-resolved from language %r → %s", language, job)
+
         if not job or not build_id:
-            return _err("'job' and 'build_id' inputs required")
+            return _err("'job' (or 'language') and 'build_id' inputs required")
 
         provider_kwargs = _provider_kwargs_from_inputs(inputs, provider_name)
         provider = get_provider(provider_name, **provider_kwargs)
@@ -699,6 +747,8 @@ async def _poll_build(provider, job: str, build_id: str, timeout: int):
 # ---------------------------------------------------------------------------
 
 async def _gql(headers: dict, query: str, variables: dict) -> dict:
+    op_name = query.strip().split("(")[0].split("{")[0].split()[-1] if query.strip() else "unknown"
+    logger.warning("GraphQL %s → %s", op_name, MYTHIC_GRAPHQL)
     async with httpx.AsyncClient(verify=False, timeout=15) as client:
         r = await client.post(
             MYTHIC_GRAPHQL,
@@ -708,6 +758,7 @@ async def _gql(headers: dict, query: str, variables: dict) -> dict:
         r.raise_for_status()
         body = r.json()
         if "errors" in body:
+            logger.error("GraphQL errors: %s", body["errors"])
             raise RuntimeError(f"GraphQL error: {body['errors']}")
         return body.get("data", {})
 

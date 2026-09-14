@@ -33,6 +33,10 @@ class JenkinsProvider(CIProvider):
         self.base_url = url.rstrip("/")
         self.auth = (user, token) if user and token else None
         self.verify_ssl = verify_ssl
+        logger.warning(
+            "JenkinsProvider init: base_url=%r auth=%s",
+            self.base_url, "set" if self.auth else "none",
+        )
 
     def _client(self, timeout: float = 30) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -52,10 +56,17 @@ class JenkinsProvider(CIProvider):
         async with self._client() as client:
             if parameters:
                 endpoint = f"{self.base_url}/{job_path}/buildWithParameters"
+                logger.warning("POST %s (params: %s)", endpoint, list(parameters.keys()))
                 r = await client.post(endpoint, data=parameters)
             else:
                 endpoint = f"{self.base_url}/{job_path}/build"
+                logger.warning("POST %s (no params)", endpoint)
                 r = await client.post(endpoint)
+
+            logger.warning(
+                "Jenkins trigger response: HTTP %d, Location=%s",
+                r.status_code, r.headers.get("Location", "(none)"),
+            )
 
             if r.status_code not in (200, 201, 302):
                 return BuildResult(
@@ -64,7 +75,9 @@ class JenkinsProvider(CIProvider):
                 )
 
             queue_url = r.headers.get("Location", "")
+            logger.warning("Resolving queue item: %s", queue_url)
             build_id = await self._resolve_queue_item(client, queue_url)
+            logger.warning("Resolved build_id: %s", build_id or "(empty)")
 
         return BuildResult(
             provider=self.name,
@@ -75,9 +88,10 @@ class JenkinsProvider(CIProvider):
 
     async def _resolve_queue_item(self, client: httpx.AsyncClient, queue_url: str) -> str:
         if not queue_url:
+            logger.warning("No queue URL returned, cannot resolve build ID")
             return ""
         api_url = queue_url.rstrip("/") + "/api/json"
-        for _ in range(12):
+        for attempt in range(12):
             await asyncio.sleep(2)
             try:
                 r = await client.get(api_url)
@@ -85,11 +99,17 @@ class JenkinsProvider(CIProvider):
                     data = r.json()
                     exe = data.get("executable")
                     if exe and exe.get("number"):
+                        logger.warning("Queue resolved to build #%s", exe["number"])
                         return str(exe["number"])
                     if data.get("cancelled"):
+                        logger.warning("Build was cancelled in queue")
                         return ""
-            except httpx.HTTPError:
-                pass
+                    logger.warning("Queue poll %d/12: waiting (why=%s)", attempt + 1, data.get("why", ""))
+                else:
+                    logger.warning("Queue poll %d/12: HTTP %d", attempt + 1, r.status_code)
+            except httpx.HTTPError as exc:
+                logger.warning("Queue poll %d/12: %r", attempt + 1, exc)
+        logger.warning("Queue item never resolved after 12 attempts")
         return ""
 
     async def get_build_status(self, job: str, build_id: str) -> BuildResult:

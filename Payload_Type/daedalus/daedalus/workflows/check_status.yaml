@@ -4,10 +4,11 @@ trigger: manual
 trigger_data: {}
 environment:
     PROVIDER: jenkins
-    JOB: maas-loader-build
+    JOB: ""
     JENKINS_URL: http://10.5.99.3:8080
     JENKINS_USER: admin
     JENKINS_TOKEN: admin
+    LANGUAGE: c-mingw
     BUILD_ID: ""
     INCLUDE_LOG: "false"
 keywords:
@@ -24,5 +25,6 @@ steps:
       inputs:
           provider: "{{env.PROVIDER}}"
           job: "{{env.JOB}}"
+          language: "{{env.LANGUAGE}}"
           build_id: "{{env.BUILD_ID}}"
           include_log: "{{env.INCLUDE_LOG}}"

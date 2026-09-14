@@ -6,7 +6,7 @@ Daedalus is a Mythic eventing container that connects Mythic C2 to CI/CD build p
 
 | Provider | Name | Auth | Job identifier |
 |----------|------|------|----------------|
-| Jenkins | `jenkins` | User + API token | Job name or path (e.g. `maas-loader-build`, `folder/job-name`) |
+| Jenkins | `jenkins` | User + API token | Job name or path (e.g. `loader-c-mingw`, `folder/job-name`). Auto-resolved from `language` as `loader-{language}` when not set |
 | Forgejo Actions | `forgejo` | Personal access token | `owner/repo` or defaults to env vars |
 | GitHub Actions | `github` | Personal access token or GitHub App token | `owner/repo` or defaults to env vars |
 | GitLab CI/CD | `gitlab` | Private token | Project ID (numeric) |
@@ -25,12 +25,12 @@ Triggers a CI/CD build on the specified provider, optionally polls for completio
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `provider` | No | `DAEDALUS_PROVIDER` env or `jenkins` | CI provider name |
-| `job` | Yes | `DAEDALUS_JOB` env | Job/pipeline/workflow name |
+| `job` | No | auto-resolved from `language` | Job/pipeline/workflow name. If empty, derived as `loader-{language}` |
 | `mythic_api_token` | Yes | none | Mythic API token for GraphQL |
 | `payload_uuid` | No | none | Mythic payload UUID to associate with the build |
 | `poll` | No | `true` | Whether to poll for build completion |
 | `timeout` | No | `300` | Max seconds to poll |
-| `language` | No | none | Forwarded as `LANGUAGE` build parameter |
+| `language` | No | `c-mingw` | Build language/toolchain. Also used to auto-resolve the job name as `loader-{language}` |
 | `output_format` | No | none | Forwarded as `OUTPUT_FORMAT` build parameter |
 | `obfuscation` | No | none | Forwarded as `OBFUSCATION` build parameter |
 | `param_*` | No | none | Any `param_`-prefixed input is forwarded as a build parameter (prefix stripped, key uppercased) |
@@ -54,7 +54,8 @@ Checks the current status of a CI/CD build.
 | Input | Required | Description |
 |-------|----------|-------------|
 | `provider` | No | CI provider name |
-| `job` | Yes | Job/pipeline name |
+| `job` | No | Job/pipeline name. Auto-resolved from `language` as `loader-{language}` when not set |
+| `language` | No | Used to auto-resolve `job` when `job` is empty |
 | `build_id` | Yes | Build number or run ID |
 | `include_log` | No | `true` to include the last 50 lines of build log |
 
@@ -77,7 +78,8 @@ Downloads a build artifact from CI/CD and uploads it to Mythic.
 | Input | Required | Description |
 |-------|----------|-------------|
 | `provider` | No | CI provider name |
-| `job` | Yes | Job/pipeline name |
+| `job` | No | Job/pipeline name. Auto-resolved from `language` as `loader-{language}` when not set |
+| `language` | No | Used to auto-resolve `job` when `job` is empty |
 | `build_id` | Yes | Build number or run ID |
 | `artifact_name` | No | Specific artifact name (defaults to first available) |
 | `mythic_api_token` | Yes | Mythic API token |

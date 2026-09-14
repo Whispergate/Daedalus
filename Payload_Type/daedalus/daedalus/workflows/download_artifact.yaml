@@ -4,10 +4,11 @@ trigger: manual
 trigger_data: {}
 environment:
     PROVIDER: jenkins
-    JOB: maas-loader-build
+    JOB: ""
     JENKINS_URL: http://10.5.99.3:8080
     JENKINS_USER: admin
     JENKINS_TOKEN: admin
+    LANGUAGE: c-mingw
     BUILD_ID: ""
     ARTIFACT_NAME: ""
     PAYLOAD_UUID: ""
@@ -26,6 +27,7 @@ steps:
       inputs:
           provider: "{{env.PROVIDER}}"
           job: "{{env.JOB}}"
+          language: "{{env.LANGUAGE}}"
           build_id: "{{env.BUILD_ID}}"
           artifact_name: "{{env.ARTIFACT_NAME}}"
           mythic_api_token: "{{mythic.apitoken}}"

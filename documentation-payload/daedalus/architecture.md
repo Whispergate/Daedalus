@@ -38,6 +38,10 @@ All CI/CD providers implement a common interface (`CIProvider`):
 
 The `get_provider(name)` factory selects the right implementation based on the `provider` input or `DAEDALUS_PROVIDER` env var.
 
+### Job Resolution
+
+When the `job` input is empty, Daedalus auto-resolves the Jenkins job name from the `language` input using the pattern `loader-{language}`. This matches the per-language job naming convention used by the Labyrinth setup script (e.g. `c-mingw` → `loader-c-mingw`, `csharp` → `loader-csharp`).
+
 ### Build Parameters
 
 Parameters reach the CI/CD system in two ways:

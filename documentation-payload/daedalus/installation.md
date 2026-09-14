@@ -60,7 +60,7 @@ The workflows which need to have their environment variables set are:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DAEDALUS_PROVIDER` | `jenkins` | Default CI provider |
-| `DAEDALUS_JOB` | - | Default job/pipeline name |
+| `DAEDALUS_JOB` | (auto-resolved) | Default job/pipeline name. When empty, auto-resolved from the `LANGUAGE` variable as `loader-{language}` (e.g. `c-mingw` → `loader-c-mingw`) |
 
 #### Jenkins
 
