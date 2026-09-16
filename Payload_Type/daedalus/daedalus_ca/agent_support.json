@@ -1,0 +1,27 @@
+{
+    "apollo": {
+        "execute_bof": "execute_coff",
+        "execute_assembly": "execute_assembly",
+        "upload_file": "upload"
+    },
+    "athena": {
+        "execute_bof": "coff",
+        "execute_assembly": "execute-assembly",
+        "upload_file": "upload"
+    },
+    "merlin": {
+        "execute_bof": "coff",
+        "execute_assembly": "execute-assembly",
+        "upload_file": "upload"
+    },
+    "poseidon": {
+        "execute_bof": "coff",
+        "execute_assembly": "execute_assembly",
+        "upload_file": "upload"
+    },
+    "starburst": {
+        "execute_bof": "execute_coff",
+        "execute_assembly": "execute_assembly",
+        "upload_file": "upload"
+    } 
+}

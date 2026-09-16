@@ -3,6 +3,6 @@
   "exclude_c2_profiles": true,
   "exclude_documentation_payload": true,
   "exclude_documentation_c2": true,
-  "exclude_agent_icons": true,
+  "exclude_agent_icons": false,
   "remote_images": {}
 }

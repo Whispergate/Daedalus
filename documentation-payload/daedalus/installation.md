@@ -1,4 +1,9 @@
-# Installation
++++
+title = "Installation"
+chapter = false
+weight = 10
+pre = "<b>1. </b>"
++++
 
 ## Prerequisites
 
@@ -37,6 +42,24 @@ Edit `Payload_Type/daedalus/rabbitmq_config.json` before building:
 
 The `rabbitmq_password` must match your Mythic installation's RabbitMQ password (found in your Mythic `.env` file as `RABBITMQ_PASSWORD`).
 
+### Mythic Secrets (Command Augment)
+
+The CA commands (`fetch_execute`, `register_tool`, `obfuscate_build`) resolve CI/CD credentials from **Mythic Secrets** - user-level settings that persist across sessions.
+
+1. In the Mythic UI, go to **Settings > Secrets** (user icon in the top-right)
+2. Add the secrets for your CI/CD provider(s):
+
+| Secret Name | Description |
+|-------------|-------------|
+| `JENKINS_API_KEY` | Jenkins API token |
+| `GITHUB_API_KEY` | GitHub personal access token |
+| `GITLAB_API_KEY` | GitLab private token |
+| `FORGEJO_API_KEY` | Forgejo personal access token |
+| `GITEA_API_KEY` | Gitea personal access token |
+| `REPO_TOKEN` | Access token for private source repos (used by `obfuscate_build`) |
+
+Each operator sets their own secrets. The CA commands check Mythic Secrets before falling back to environment variables, so operators on the same Mythic instance can use different credentials.
+
 ### Eventing Workflows
 
 As of v3.3.36, the `eventingImportContainerWorkflow` mutation has a bug (`filemeta` null constraint), so workflows must be uploaded manually. After every container rebuild that changes workflow YAML files, re-upload them through the Mythic Eventing UI to update the definitions in Mythic's database.
@@ -47,9 +70,9 @@ Upload each file from `Payload_Type/daedalus/daedalus/workflows/*.yaml`:
 
 **Note:** The `build_and_scan.yaml` workflow calls Daedalus's unified `build_and_scan` function which handles the full pipeline (build, artifact download, Mythic upload, LitterBox scan) in a single step. The `scan_payload.yaml` workflow calls Sphinx's `execute_script` function directly. If Sphinx is not available, use Daedalus's `scan_payload` custom function with `method=direct` and a `LITTERBOX_URL` instead.
 
-### Environment Variables
+### Environment Variables (Eventing)
 
-Set these in Mythic's Eventing UI:
+Set these in Mythic's Eventing UI for the workflow environment variables:
 
 ![Editing Environment Variables](image-1.png)
 ![Environment Variables](image-2.png)
@@ -64,17 +87,15 @@ The workflows which need to have their environment variables set are:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DAEDALUS_PROVIDER` | `jenkins` | Default CI provider |
-| `DAEDALUS_JOB` | (auto-resolved) | Default job/pipeline name. When empty, auto-resolved from the `LANGUAGE` variable as `loader-{language}` (e.g. `c-mingw` → `loader-c-mingw`) |
+| `DAEDALUS_JOB` | (auto-resolved) | Default job/pipeline name. When empty, auto-resolved from the `LANGUAGE` variable as `loader-{language}` |
 
 #### Build Parameters
 
-These are forwarded to the CI/CD pipeline as build parameters. Daedalus does not interpret them - their meaning is defined by your pipeline's build stage.
-
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LANGUAGE` | `c-mingw` | Build language/toolchain identifier. Also used for job auto-resolution (`loader-{language}`). Labyrinth standard values: `c-mingw`, `csharp`, `rust`, `go`, `nim`, `cpp-mingw`. Custom pipelines can use any value as long as a matching `loader-{value}` job exists |
-| `OUTPUT_FORMAT` | `exe` | Output format passed to the pipeline. Common values: `exe` (Windows executable), `dll` (dynamic library), `bin` (raw binary/shellcode), `shellcode` (position-independent code), `svc` (Windows service executable). The pipeline's build stage interprets this value to select compiler flags and linker options |
-| `OBFUSCATION` | `none` | Obfuscation profile name passed to the pipeline. The value is toolchain-specific - common values: `none` (no obfuscation), `basic` (simple transforms like string encryption), `full` (aggressive obfuscation including control flow flattening), or a named profile defined in your build scripts (e.g. `shikata`, `xor`, `aes`). Your Jenkinsfile or workflow config decides what each value does |
+| `LANGUAGE` | `c-mingw` | Build language/toolchain identifier. Also used for job auto-resolution (`loader-{language}`) |
+| `OUTPUT_FORMAT` | `exe` | Output format passed to the pipeline: `exe`, `dll`, `bin`, `shellcode`, `svc` |
+| `OBFUSCATION` | `none` | Obfuscation profile: `none`, `basic`, `full`, or toolchain-specific name |
 
 #### Jenkins
 
@@ -88,7 +109,7 @@ These are forwarded to the CI/CD pipeline as build parameters. Daedalus does not
 
 | Variable | Description |
 |----------|-------------|
-| `FORGEJO_URL` | Forgejo base URL (e.g. `https://forgejo.internal:3000`) |
+| `FORGEJO_URL` | Forgejo base URL |
 | `FORGEJO_TOKEN` | Forgejo personal access token |
 | `FORGEJO_OWNER` | Default repository owner/org |
 | `FORGEJO_REPO` | Default repository name |
@@ -106,7 +127,7 @@ These are forwarded to the CI/CD pipeline as build parameters. Daedalus does not
 
 | Variable | Description |
 |----------|-------------|
-| `GITLAB_URL` | GitLab base URL (e.g. `https://gitlab.internal`) |
+| `GITLAB_URL` | GitLab base URL |
 | `GITLAB_TOKEN` | GitLab private token |
 | `GITLAB_PROJECT_ID` | Default project ID (numeric) |
 
@@ -114,7 +135,7 @@ These are forwarded to the CI/CD pipeline as build parameters. Daedalus does not
 
 | Variable | Description |
 |----------|-------------|
-| `GITEA_URL` | Gitea base URL (e.g. `https://gitea.internal:3000`) |
+| `GITEA_URL` | Gitea base URL |
 | `GITEA_TOKEN` | Gitea personal access token |
 | `GITEA_OWNER` | Default repository owner/org |
 | `GITEA_REPO` | Default repository name |
@@ -122,6 +143,15 @@ These are forwarded to the CI/CD pipeline as build parameters. Daedalus does not
 ## Verify Installation
 
 After starting Mythic with Daedalus installed:
+
+### Command Augment Container
+
+1. Navigate to any active callback from a supported agent (Apollo, Athena, Merlin, Poseidon, Starburst)
+2. You should see `fetch_execute`, `register_tool`, and `obfuscate_build` in the command menu
+3. Configure your Mythic Secrets (Settings > Secrets) with CI/CD API tokens
+4. Run `register_tool` against a known CI job to verify connectivity
+
+### Eventing Container
 
 1. Navigate to the **Eventing** page in the Mythic UI
 2. You should see the seven Daedalus workflows registered
