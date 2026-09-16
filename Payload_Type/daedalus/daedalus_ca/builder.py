@@ -5,6 +5,7 @@ from mythic_container.PayloadBuilder import (
     AgentType,
     BuildResponse,
     BuildStatus,
+    SupportedOS
 )
 
 from daedalus_ca.commands.fetch_execute import FetchExecute
@@ -22,7 +23,8 @@ class DaedalusCA(PayloadType):
         "CI/CD artifact fetching, tool registration, and obfuscation pipeline commands"
     )
     agent_type = AgentType.CommandAugment
-    supported_os = []
+    supported_os = [ SupportedOS.Windows, SupportedOS.Linux, SupportedOS.MacOS ]
+    semver = "1.1"
     agent_path = _AGENT_DIR
     agent_icon_path = str(_AGENT_DIR.parent / "assets" / "daedalus.png")
     command_augment_supported_agents = ["apollo", "athena", "merlin", "poseidon", "starburst"]
