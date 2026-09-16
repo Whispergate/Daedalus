@@ -27,21 +27,6 @@ sudo ./mythic-cli install folder /path/to/Daedalus
 
 ## Configuration
 
-### RabbitMQ
-
-Edit `Payload_Type/daedalus/rabbitmq_config.json` before building:
-
-```json
-{
-  "rabbitmq_host": "127.0.0.1",
-  "rabbitmq_password": "<your-mythic-rabbitmq-password>",
-  "mythic_server_host": "127.0.0.1",
-  "debug_level": "warning"
-}
-```
-
-The `rabbitmq_password` must match your Mythic installation's RabbitMQ password (found in your Mythic `.env` file as `RABBITMQ_PASSWORD`).
-
 ### Mythic Secrets (Command Augment)
 
 The CA commands (`fetch_execute`, `register_tool`, `obfuscate_build`) resolve CI/CD credentials from **Mythic Secrets** - user-level settings that persist across sessions.
@@ -66,7 +51,7 @@ As of v3.3.36, the `eventingImportContainerWorkflow` mutation has a bug (`fileme
 
 Upload each file from `Payload_Type/daedalus/daedalus/workflows/*.yaml`:
 
-![Eventing Upload](image.png)
+![Eventing Upload](/agents/daedalus/installation/image.png)
 
 **Note:** The `build_and_scan.yaml` workflow calls Daedalus's unified `build_and_scan` function which handles the full pipeline (build, artifact download, Mythic upload, LitterBox scan) in a single step. The `scan_payload.yaml` workflow calls Sphinx's `execute_script` function directly. If Sphinx is not available, use Daedalus's `scan_payload` custom function with `method=direct` and a `LITTERBOX_URL` instead.
 
@@ -74,8 +59,8 @@ Upload each file from `Payload_Type/daedalus/daedalus/workflows/*.yaml`:
 
 Set these in Mythic's Eventing UI for the workflow environment variables:
 
-![Editing Environment Variables](image-1.png)
-![Environment Variables](image-2.png)
+![Editing Environment Variables](/agents/daedalus/installation/image-1.png)
+![Environment Variables](/agents/daedalus/installation/image-2.png)
 
 The workflows which need to have their environment variables set are:
 
