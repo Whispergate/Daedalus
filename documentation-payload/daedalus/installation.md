@@ -51,7 +51,7 @@ As of v3.3.36, the `eventingImportContainerWorkflow` mutation has a bug (`fileme
 
 Upload each file from `Payload_Type/daedalus/daedalus/workflows/*.yaml`:
 
-![Eventing Upload](/agents/daedalus/installation/image.png)
+![Eventing Upload](/agents/daedalus/image.png)
 
 **Note:** The `build_and_scan.yaml` workflow calls Daedalus's unified `build_and_scan` function which handles the full pipeline (build, artifact download, Mythic upload, LitterBox scan) in a single step. The `scan_payload.yaml` workflow calls Sphinx's `execute_script` function directly. If Sphinx is not available, use Daedalus's `scan_payload` custom function with `method=direct` and a `LITTERBOX_URL` instead.
 
@@ -59,8 +59,8 @@ Upload each file from `Payload_Type/daedalus/daedalus/workflows/*.yaml`:
 
 Set these in Mythic's Eventing UI for the workflow environment variables:
 
-![Editing Environment Variables](/agents/daedalus/installation/image-1.png)
-![Environment Variables](/agents/daedalus/installation/image-2.png)
+![Editing Environment Variables](/agents/daedalus/image-1.png)
+![Environment Variables](/agents/daedalus/image-2.png)
 
 The workflows which need to have their environment variables set are:
 
