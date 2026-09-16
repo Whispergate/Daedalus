@@ -29,13 +29,14 @@ from daedalus_ca.secrets import resolve_provider_kwargs
 logger = logging.getLogger("daedalus_ca.fetch_execute")
 
 _SUPPORT_FILE = Path(__file__).parent.parent / "agent_support.json"
-_AGENT_SUPPORT: dict = {}
+_AGENT_SUPPORT: dict[str, dict] = {}
 
 
-def _load_support() -> dict:
+def _load_support() -> dict[str, dict]:
     global _AGENT_SUPPORT
     if not _AGENT_SUPPORT:
-        _AGENT_SUPPORT = json.loads(_SUPPORT_FILE.read_text())
+        entries = json.loads(_SUPPORT_FILE.read_text())
+        _AGENT_SUPPORT = {e["agent"]: e for e in entries}
     return _AGENT_SUPPORT
 
 
@@ -241,18 +242,23 @@ class FetchExecute(CommandBase):
             if not target_payload_type and callback_resp.success and callback_resp.results:
                 target_payload_type = getattr(callback_resp.results[0], "payload_type", "") or ""
 
-            agent_cmds = support.get(target_payload_type, {})
+            agent_cfg = support.get(target_payload_type, {})
 
             if tool_type == "bof":
-                native_cmd = agent_cmds.get("execute_bof", "execute_coff")
-                params = {"file_id": agent_file_id}
+                native_cmd = agent_cfg.get("bof_command", "execute_coff")
+                file_param = agent_cfg.get("bof_file_parameter_name", "bof_file")
+                params = {file_param: agent_file_id}
                 if bof_args:
-                    params["bof_args"] = bof_args
+                    arg_param = agent_cfg.get("bof_argument_array_parameter_name", "arguments")
+                    params[arg_param] = bof_args
             elif tool_type == "assembly":
-                native_cmd = agent_cmds.get("execute_assembly", "execute_assembly")
-                params = {"file_id": agent_file_id}
+                default_method = agent_cfg.get("assembly_default_execution_method", "execute_assembly")
+                native_cmd = agent_cfg.get(f"{default_method}_command", "execute_assembly")
+                file_param = agent_cfg.get(f"{default_method}_file_parameter_name", "assembly_file")
+                params = {file_param: agent_file_id}
                 if assembly_args:
-                    params["arguments"] = assembly_args
+                    arg_param = agent_cfg.get(f"{default_method}_argument_parameter_name", "assembly_arguments")
+                    params[arg_param] = assembly_args
             else:
                 raise ValueError(f"Unknown tool_type: {tool_type}")
 

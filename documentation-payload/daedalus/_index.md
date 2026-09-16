@@ -28,13 +28,12 @@ Daedalus offers three execution/registration modes for supported payload types:
 
 ### Supported Agents
 
-| Agent | BOF Command | Assembly Command | Upload Command |
-|-------|-------------|-----------------|----------------|
-| Apollo | `execute_coff` | `execute_assembly` | `upload` |
-| Athena | `coff` | `execute-assembly` | `upload` |
-| Merlin | `coff` | `execute-assembly` | `upload` |
-| Poseidon | `coff` | `execute_assembly` | `upload` |
-| Starburst | `execute_coff` | `execute_assembly` | `upload` |
+| Agent | BOF Command | Assembly Command | Default Assembly Method | Upload Command |
+|-------|-------------|-----------------|------------------------|----------------|
+| Apollo | `execute_coff` | `execute_assembly` / `inline_assembly` | `inline_assembly` | `upload` |
+| Athena | `coff` | `execute-assembly` | `execute_assembly` | `upload` |
+| Merlin | `coff` | `execute-assembly` | `execute_assembly` | `upload` |
+| Starburst | `execute_coff` | `execute_assembly` | `execute_assembly` | `upload` |
 
 ### Credential Resolution
 
@@ -59,24 +58,45 @@ Configure secrets in your Mythic user settings (**Settings > Secrets**):
 
 ### agent_support.json
 
-This file identifies which payload types are supported and how to pass execution from Daedalus to them.
-This takes the following format:
+This file identifies which payload types are supported and maps Daedalus actions to each agent's native command names and parameter names. The format is an array of objects (one per agent), mirroring the pattern used by [forge](https://github.com/MythicAgents/forge):
+
 ```json
-{
-    "apollo": {
-        "execute_bof": "execute_coff",
-        "execute_assembly": "execute_assembly",
-        "upload_file": "upload"
+[
+    {
+        "agent": "apollo",
+        "bof_command": "execute_coff",
+        "bof_file_parameter_name": "bof_file",
+        "bof_argument_array_parameter_name": "coff_arguments",
+        "bof_entrypoint_parameter_name": "function_name",
+        "inline_assembly_command": "inline_assembly",
+        "inline_assembly_file_parameter_name": "assembly_file",
+        "inline_assembly_argument_parameter_name": "assembly_arguments",
+        "execute_assembly_command": "execute_assembly",
+        "execute_assembly_file_parameter_name": "assembly_file",
+        "execute_assembly_argument_parameter_name": "assembly_arguments",
+        "assembly_default_execution_method": "inline_assembly",
+        "upload_command": "upload"
     }
-}
+]
 ```
-This is a map of entries, one for each agent that's supported. Each entry maps a Daedalus action to the agent's native command name:
 
-* `execute_bof` - which command in the agent executes a Beacon Object File
-* `execute_assembly` - which command in the agent executes a .NET assembly in-memory
-* `upload_file` - which command in the agent uploads a file
+Each entry describes:
 
-If you want to add your own agent, add an entry to this file and add the agent name to `command_augment_supported_agents` in `agent_definition.py`, then rebuild:
+* `agent` - the payload type name
+* `bof_command` - native command that executes a BOF/COFF
+* `bof_file_parameter_name` - parameter name for the BOF file
+* `bof_argument_array_parameter_name` - parameter name for BOF arguments
+* `bof_entrypoint_parameter_name` - parameter name for the BOF entry point function
+* `inline_assembly_command` - native command for inline assembly execution (empty if unsupported)
+* `inline_assembly_file_parameter_name` - parameter name for the inline assembly file
+* `inline_assembly_argument_parameter_name` - parameter name for inline assembly arguments
+* `execute_assembly_command` - native command for execute-assembly
+* `execute_assembly_file_parameter_name` - parameter name for the assembly file
+* `execute_assembly_argument_parameter_name` - parameter name for assembly arguments
+* `assembly_default_execution_method` - preferred assembly method (`inline_assembly` or `execute_assembly`)
+* `upload_command` - native command for file upload
+
+To add your own agent, add an entry to this file and add the agent name to `command_augment_supported_agents` in `agent_definition.py`, then rebuild:
 ```bash
 sudo ./mythic-cli build daedalus
 ```

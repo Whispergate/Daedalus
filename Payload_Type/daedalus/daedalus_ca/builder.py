@@ -23,11 +23,11 @@ class DaedalusCA(PayloadType):
         "CI/CD artifact fetching, tool registration, and obfuscation pipeline commands"
     )
     agent_type = AgentType.CommandAugment
-    supported_os = [ SupportedOS.Windows, SupportedOS.Linux, SupportedOS.MacOS ]
+    supported_os = [ SupportedOS.Windows ]
     semver = "1.1"
     agent_path = _AGENT_DIR
     agent_icon_path = str(_AGENT_DIR.parent / "assets" / "daedalus.png")
-    command_augment_supported_agents = ["apollo", "athena", "merlin", "poseidon", "starburst"]
+    command_augment_supported_agents = ["apollo", "athena", "merlin", "starburst"]
     supports_dynamic_loading = False
     note = (
         "Daedalus CA adds fetch_execute, register_tool, and obfuscate_build "

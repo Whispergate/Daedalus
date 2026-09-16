@@ -131,7 +131,7 @@ After starting Mythic with Daedalus installed:
 
 ### Command Augment Container
 
-1. Navigate to any active callback from a supported agent (Apollo, Athena, Merlin, Poseidon, Starburst)
+1. Navigate to any active callback from a supported agent (Apollo, Athena, Merlin, Starburst)
 2. You should see `fetch_execute`, `register_tool`, and `obfuscate_build` in the command menu
 3. Configure your Mythic Secrets (Settings > Secrets) with CI/CD API tokens
 4. Run `register_tool` against a known CI job to verify connectivity
