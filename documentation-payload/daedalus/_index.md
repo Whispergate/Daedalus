@@ -52,7 +52,7 @@ Configure secrets in your Mythic user settings (**Settings > Secrets**):
 | `GITLAB_API_KEY` | GitLab | Private token |
 | `FORGEJO_API_KEY` | Forgejo | Personal access token |
 | `GITEA_API_KEY` | Gitea | Personal access token |
-| `REPO_TOKEN` | Any | Access token for private source repos (used by `obfuscate_build`) |
+| `REPO_TOKEN` | Any | Access token for private source repos (used by `daedalus_obfuscate_build`) |
 
 ## Supporting Files
 

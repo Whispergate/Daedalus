@@ -1,5 +1,5 @@
 +++
-title = "register_tool"
+title = "daedalus_register_tool"
 chapter = false
 weight = 101
 hidden = false
@@ -9,7 +9,7 @@ hidden = false
 Fetch a BOF or .NET assembly from any CI/CD provider and register it as a persistent file in Mythic for later use by any callback.
 
 - Needs Admin: False
-- Version: 2
+- Version: 3
 - Author: @Lavender-exe
 
 ### Arguments
@@ -64,8 +64,8 @@ Each provider has optional credential overrides. These override Mythic Secrets a
 ## Usage
 
 ```
-register_tool -provider jenkins -job loader-c-mingw -tool_name whoami.o
-register_tool -provider github -job build.yml -build_id latest -tool_name seatbelt.exe
+daedalus_register_tool -job loader-c-mingw -tool_name whoami.o
+daedalus_register_tool -provider github -job build.yml -build_id latest -tool_name seatbelt.exe
 ```
 
 ## MITRE ATT&CK Mapping
@@ -74,6 +74,6 @@ register_tool -provider github -job build.yml -build_id latest -tool_name seatbe
 
 ## Detailed Summary
 
-Unlike `fetch_execute`, this command does not delegate to the target agent. It downloads the artifact, uploads it to Mythic with `DeleteAfterFetch=False`, and completes. The registered file remains available in Mythic's file browser for any callback to use later.
+Unlike `daedalus_fetch_execute`, this command does not delegate to the target agent. It downloads the artifact, uploads it to Mythic with `DeleteAfterFetch=False`, and completes. The registered file remains available in Mythic's file browser for any callback to use later.
 
-The same artifact auto-selection logic applies as in `fetch_execute`.
+The same artifact auto-selection logic applies as in `daedalus_fetch_execute`.

@@ -19,7 +19,7 @@ Both communicate with Mythic via RabbitMQ and share the same provider abstractio
 ```
 Operator (Mythic UI)
     │
-    │  Runs CA command against a callback (e.g. fetch_execute)
+    │  Runs CA command against a callback (e.g. daedalus_fetch_execute)
     ▼
 Mythic Server
     │

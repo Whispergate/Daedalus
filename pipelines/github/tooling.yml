@@ -1,0 +1,170 @@
+# GitHub Actions workflow for Daedalus daedalus_obfuscate_build.
+#
+# Clones a third-party repo, compiles it, optionally obfuscates,
+# and uploads the artifact. Does NOT fetch shellcode from Mythic.
+#
+# Daedalus dispatches this via the workflow_dispatch event.
+# Runs on a self-hosted runner labeled "maas" with your build
+# toolchain installed.
+
+name: Daedalus Tooling Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      REPO_URL:
+        description: "Git clone URL of the tool repo"
+        required: true
+      REPO_TOKEN:
+        description: "Access token for private repos"
+        required: false
+        default: ""
+      REF:
+        description: "Branch or tag to checkout"
+        required: false
+        default: "main"
+      SOURCE_PATH:
+        description: "Subdirectory or file to compile (empty = repo root)"
+        required: false
+        default: ""
+      LANGUAGE:
+        description: "Build language: csharp, go, rust, c-mingw, cpp-mingw, nim"
+        required: false
+        default: "csharp"
+      OUTPUT_FORMAT:
+        description: "Output format: exe, dll, bin, shellcode, svc"
+        required: false
+        default: "exe"
+      OBFUSCATION:
+        description: "Obfuscation: none, basic, full, garble, nimcrypt2"
+        required: false
+        default: "none"
+      NIMCRYPT2_FLAGS:
+        description: "Extra flags for Nimcrypt2 (e.g. -l for LLVM, -s to skip sandbox checks)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: [self-hosted, maas]
+
+    steps:
+      - name: Clone tool repo
+        run: |
+          CLONE_URL="${{ inputs.REPO_URL }}"
+          if [ -n "${{ inputs.REPO_TOKEN }}" ]; then
+            CLONE_URL="${CLONE_URL/https:\/\//https://token:${{ inputs.REPO_TOKEN }}@}"
+          fi
+          git clone --depth 1 --branch "${{ inputs.REF }}" "$CLONE_URL" repo
+          echo "[+] Cloned ${{ inputs.REPO_URL }} @ ${{ inputs.REF }}"
+
+      - name: Build
+        working-directory: repo/${{ inputs.SOURCE_PATH }}
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/build
+
+          echo "[*] Language=${{ inputs.LANGUAGE }} Format=${{ inputs.OUTPUT_FORMAT }}"
+
+          case "${{ inputs.LANGUAGE }}" in
+            csharp)
+              # ---- C# / .NET ----
+              TARGET=$(find . -maxdepth 3 -name '*.sln' | head -1)
+              [ -z "$TARGET" ] && TARGET=$(find . -maxdepth 3 -name '*.csproj' | head -1)
+              [ -z "$TARGET" ] && { echo "[-] No .sln or .csproj found"; exit 1; }
+              echo "[*] Building $TARGET"
+              dotnet build "$TARGET" -c Release -o ${GITHUB_WORKSPACE}/build
+              ;;
+            go)
+              # ---- Go ----
+              GOOS=windows GOARCH=amd64 go build \
+                -ldflags="-s -w" \
+                -o ${GITHUB_WORKSPACE}/build/ \
+                ./...
+              ;;
+            rust)
+              # ---- Rust ----
+              cargo build --release --target x86_64-pc-windows-gnu
+              cp target/x86_64-pc-windows-gnu/release/*.exe ${GITHUB_WORKSPACE}/build/ 2>/dev/null || true
+              cp target/x86_64-pc-windows-gnu/release/*.dll ${GITHUB_WORKSPACE}/build/ 2>/dev/null || true
+              ;;
+            c-mingw)
+              # ---- C / MinGW ----
+              if [ -f Makefile ]; then
+                make CC=x86_64-w64-mingw32-gcc
+                find . -maxdepth 2 \( -name '*.exe' -o -name '*.dll' \) \
+                  -exec cp {} ${GITHUB_WORKSPACE}/build/ \;
+              else
+                SOURCES=$(find . -name '*.c' -not -path './build/*' | sort | tr '\n' ' ')
+                x86_64-w64-mingw32-gcc -o ${GITHUB_WORKSPACE}/build/tool.exe $SOURCES -s -O2
+              fi
+              ;;
+            cpp-mingw)
+              # ---- C++ / MinGW ----
+              if [ -f Makefile ]; then
+                make CXX=x86_64-w64-mingw32-g++
+                find . -maxdepth 2 \( -name '*.exe' -o -name '*.dll' \) \
+                  -exec cp {} ${GITHUB_WORKSPACE}/build/ \;
+              else
+                SOURCES=$(find . -name '*.cpp' -o -name '*.cc' | sort | tr '\n' ' ')
+                x86_64-w64-mingw32-g++ -o ${GITHUB_WORKSPACE}/build/tool.exe $SOURCES -s -O2 -static
+              fi
+              ;;
+            nim)
+              # ---- Nim ----
+              ENTRY=$(find . -maxdepth 2 -name '*.nim' | head -1)
+              nim c -d:mingw -d:release -d:strip \
+                --opt:size --app:gui \
+                -o:${GITHUB_WORKSPACE}/build/tool.exe "$ENTRY"
+              ;;
+            *)
+              echo "[-] Unknown language: ${{ inputs.LANGUAGE }}"
+              exit 1
+              ;;
+          esac
+
+          echo "[+] Build complete"
+          ls -la ${GITHUB_WORKSPACE}/build/
+
+      - name: Obfuscate
+        if: inputs.OBFUSCATION != 'none'
+        run: |
+          echo "[*] Obfuscation=${{ inputs.OBFUSCATION }} Language=${{ inputs.LANGUAGE }}"
+
+          if [ "${{ inputs.OBFUSCATION }}" = "nimcrypt2" ]; then
+            NIM_TYPE="pe"
+            [ "${{ inputs.LANGUAGE }}" = "csharp" ] && NIM_TYPE="csharp"
+            for f in build/*.exe; do
+              [ -f "$f" ] || continue
+              echo "[*] Packing $f with Nimcrypt2 (-t $NIM_TYPE)"
+              nimcrypt -f "$f" -t "$NIM_TYPE" -o "${f%.exe}-packed.exe" -u -e -g ${{ inputs.NIMCRYPT2_FLAGS }}
+              mv "${f%.exe}-packed.exe" "$f"
+            done
+          else
+            case "${{ inputs.LANGUAGE }}" in
+              csharp)
+                echo "[!] C# obfuscation stub — install ConfuserEx and uncomment"
+                # for f in build/*.exe build/*.dll; do
+                #   Confuser.CLI.exe -n confuser.crproj
+                # done
+                ;;
+              go)
+                if [ "${{ inputs.OBFUSCATION }}" = "garble" ]; then
+                  cd repo/${{ inputs.SOURCE_PATH }}
+                  GOOS=windows GOARCH=amd64 garble -literals -tiny build \
+                    -ldflags="-s -w" \
+                    -o ${GITHUB_WORKSPACE}/build/ \
+                    ./...
+                fi
+                ;;
+              *)
+                echo "[!] No obfuscation handler for ${{ inputs.LANGUAGE }}/${{ inputs.OBFUSCATION }}"
+                ;;
+            esac
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tooling-build-${{ github.run_id }}
+          path: build/
+          retention-days: 1

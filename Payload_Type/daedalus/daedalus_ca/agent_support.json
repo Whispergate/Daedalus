@@ -11,7 +11,7 @@
         "execute_assembly_command": "execute_assembly",
         "execute_assembly_file_parameter_name": "assembly_file",
         "execute_assembly_argument_parameter_name": "assembly_arguments",
-        "assembly_default_execution_method": "inline_assembly",
+        "assembly_default_execution_method": "execute_assembly",
         "upload_command": "upload"
     },
     {

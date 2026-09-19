@@ -5,9 +5,9 @@ import base64
 import logging
 import os
 import re
+import httpx
 from pathlib import Path
 
-import httpx
 
 from mythic_container.EventingBase import (
     CustomFunctionDefinition,

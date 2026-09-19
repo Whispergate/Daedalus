@@ -10,6 +10,7 @@ from mythic_container.MythicCommandBase import (
     CommandBase,
     CommandAttributes,
     CommandParameter,
+    ParameterGroupInfo,
     ParameterType,
     PTTaskMessageAllData,
     PTTaskCreateTaskingMessageResponse,
@@ -63,35 +64,52 @@ class ObfuscateBuildArguments(TaskArguments):
         super().__init__(command_line, **kwargs)
         self.args = [
             CommandParameter(
-                name="provider",
-                type=ParameterType.ChooseOneCustom,
-                description="CI/CD provider that runs the obfuscation pipeline",
-                choices=["jenkins", "github", "gitlab", "forgejo", "gitea"],
-                default_value="jenkins",
-            ),
-            CommandParameter(
                 name="repo_url",
                 type=ParameterType.String,
-                description="Git clone URL for source (GitHub, Forgejo, GitLab, etc. - e.g. https://github.com/nicocha30/ligolo-ng)",
+                description="Git clone URL for source (e.g. https://github.com/nicocha30/ligolo-ng)",
                 default_value="",
-            ),
-            CommandParameter(
-                name="repo_token",
-                type=ParameterType.String,
-                description="Access token for private repos",
-                default_value="",
-            ),
-            CommandParameter(
-                name="job",
-                type=ParameterType.String,
-                description="CI job/workflow name for the obfuscation pipeline",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, ui_position=1),
+                ],
             ),
             CommandParameter(
                 name="language",
                 type=ParameterType.ChooseOneCustom,
-                description="Source language for the tools being compiled",
+                description="Source language (build toolchain selection)",
                 choices=["c-mingw", "csharp", "rust", "go", "nim", "cpp-mingw"],
                 default_value="c-mingw",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, ui_position=2),
+                ],
+            ),
+            CommandParameter(
+                name="obfuscation",
+                type=ParameterType.ChooseOneCustom,
+                description="Obfuscation level (garble for Go, ConfuserEx for .NET, nimcrypt2 for PE packing)",
+                choices=["none", "basic", "full", "garble", "nimcrypt2"],
+                default_value="full",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, ui_position=3),
+                ],
+            ),
+            CommandParameter(
+                name="provider",
+                type=ParameterType.ChooseOneCustom,
+                description="CI/CD provider (credentials resolved from Mythic Secrets)",
+                choices=["jenkins", "github", "gitlab", "forgejo", "gitea"],
+                default_value="jenkins",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=4),
+                ],
+            ),
+            CommandParameter(
+                name="job",
+                type=ParameterType.String,
+                description="CI job/workflow name (auto-resolved from language if empty)",
+                default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=5),
+                ],
             ),
             CommandParameter(
                 name="output_format",
@@ -99,89 +117,177 @@ class ObfuscateBuildArguments(TaskArguments):
                 description="Output binary format",
                 choices=["exe", "dll", "bin", "shellcode", "svc"],
                 default_value="exe",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=6),
+                ],
             ),
             CommandParameter(
-                name="obfuscation",
-                type=ParameterType.ChooseOneCustom,
-                description="Obfuscation level to apply (garble for Go, ConfuserEx for .NET, etc.)",
-                choices=["none", "basic", "full", "garble"],
-                default_value="full",
+                name="tool_type",
+                type=ParameterType.ChooseOne,
+                description="How to handle the compiled output",
+                choices=["register_only", "bof", "assembly"],
+                default_value="register_only",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=7),
+                ],
             ),
             CommandParameter(
                 name="source_path",
                 type=ParameterType.String,
-                description="Path within the repo to compile (directory or file, e.g. cmd/agent)",
+                description="Path within the repo to compile (e.g. cmd/agent)",
                 default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=8),
+                ],
             ),
             CommandParameter(
                 name="ref",
                 type=ParameterType.String,
                 description="Git branch or tag to build from",
                 default_value="main",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=9),
+                ],
             ),
             CommandParameter(
-                name="tool_type",
+                name="repo_token",
+                type=ParameterType.String,
+                description="Access token for private repos (set REPO_TOKEN in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=10),
+                ],
+            ),
+            CommandParameter(
+                name="nimcrypt2_flags",
+                type=ParameterType.String,
+                description="Extra Nimcrypt2 flags (e.g. -l for OLLVM stub, -s to skip sandbox checks)",
+                default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=11),
+                ],
+            ),
+            CommandParameter(
+                name="signing_profile",
                 type=ParameterType.ChooseOne,
-                description="How to handle the compiled output",
-                choices=["bof", "assembly", "register_only"],
-                default_value="register_only",
+                description="Code signing profile (Limelighter)",
+                choices=["none", "microsoft", "google", "intel", "custom"],
+                default_value="none",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=12),
+                ],
             ),
             CommandParameter(
                 name="timeout",
                 type=ParameterType.Number,
                 description="Build timeout in seconds",
                 default_value=300,
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=13),
+                ],
+            ),
+            # --- Provider credential overrides (all optional, resolved from Mythic Secrets by default) ---
+            CommandParameter(
+                name="jenkins_url", type=ParameterType.String,
+                description="Jenkins server URL (override - normally from Secrets/env)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=20)],
             ),
             CommandParameter(
-                name="jenkins_url", type=ParameterType.String, description="Jenkins server URL", default_value="",
+                name="jenkins_user", type=ParameterType.String,
+                description="Jenkins username (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=21)],
             ),
             CommandParameter(
-                name="jenkins_user", type=ParameterType.String, description="Jenkins username", default_value="",
+                name="jenkins_token", type=ParameterType.String,
+                description="Jenkins API token (override - set JENKINS_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=22)],
             ),
             CommandParameter(
-                name="jenkins_token", type=ParameterType.String, description="Jenkins API token", default_value="",
+                name="github_token", type=ParameterType.String,
+                description="GitHub token (override - set GITHUB_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=23)],
             ),
             CommandParameter(
-                name="github_token", type=ParameterType.String, description="GitHub token", default_value="",
+                name="github_owner", type=ParameterType.String,
+                description="GitHub repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=24)],
             ),
             CommandParameter(
-                name="github_owner", type=ParameterType.String, description="GitHub repo owner", default_value="",
+                name="github_repo", type=ParameterType.String,
+                description="GitHub repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=25)],
             ),
             CommandParameter(
-                name="github_repo", type=ParameterType.String, description="GitHub repo name", default_value="",
+                name="gitlab_url", type=ParameterType.String,
+                description="GitLab server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=26)],
             ),
             CommandParameter(
-                name="gitlab_url", type=ParameterType.String, description="GitLab server URL", default_value="",
+                name="gitlab_token", type=ParameterType.String,
+                description="GitLab token (override - set GITLAB_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=27)],
             ),
             CommandParameter(
-                name="gitlab_token", type=ParameterType.String, description="GitLab token", default_value="",
+                name="gitlab_project_id", type=ParameterType.String,
+                description="GitLab project ID (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=28)],
             ),
             CommandParameter(
-                name="gitlab_project_id", type=ParameterType.String, description="GitLab project ID", default_value="",
+                name="forgejo_url", type=ParameterType.String,
+                description="Forgejo server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=29)],
             ),
             CommandParameter(
-                name="forgejo_url", type=ParameterType.String, description="Forgejo server URL", default_value="",
+                name="forgejo_token", type=ParameterType.String,
+                description="Forgejo token (override - set FORGEJO_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=30)],
             ),
             CommandParameter(
-                name="forgejo_token", type=ParameterType.String, description="Forgejo token", default_value="",
+                name="forgejo_owner", type=ParameterType.String,
+                description="Forgejo repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=31)],
             ),
             CommandParameter(
-                name="forgejo_owner", type=ParameterType.String, description="Forgejo repo owner", default_value="",
+                name="forgejo_repo", type=ParameterType.String,
+                description="Forgejo repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=32)],
             ),
             CommandParameter(
-                name="forgejo_repo", type=ParameterType.String, description="Forgejo repo name", default_value="",
+                name="gitea_url", type=ParameterType.String,
+                description="Gitea server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=33)],
             ),
             CommandParameter(
-                name="gitea_url", type=ParameterType.String, description="Gitea server URL", default_value="",
+                name="gitea_token", type=ParameterType.String,
+                description="Gitea token (override - set GITEA_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=34)],
             ),
             CommandParameter(
-                name="gitea_token", type=ParameterType.String, description="Gitea token", default_value="",
+                name="gitea_owner", type=ParameterType.String,
+                description="Gitea repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=35)],
             ),
             CommandParameter(
-                name="gitea_owner", type=ParameterType.String, description="Gitea repo owner", default_value="",
-            ),
-            CommandParameter(
-                name="gitea_repo", type=ParameterType.String, description="Gitea repo name", default_value="",
+                name="gitea_repo", type=ParameterType.String,
+                description="Gitea repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=36)],
             ),
         ]
 
@@ -195,18 +301,18 @@ class ObfuscateBuildArguments(TaskArguments):
 
 
 class ObfuscateBuild(CommandBase):
-    cmd = "obfuscate_build"
+    cmd = "daedalus_obfuscate_build"
     description = (
-        "Pull source from any Git repo (GitHub, Forgejo, GitLab, etc.), "
-        "trigger a CI/CD obfuscation pipeline (garble, ConfuserEx, etc.) on "
-        "any supported provider, then execute in-memory or register as a tool."
+        "Pull source from a Git repo, trigger a CI/CD obfuscation pipeline, "
+        "then execute in-memory or register as a tool. Credentials are resolved "
+        "from Mythic Secrets automatically."
     )
     help_cmd = (
-        "obfuscate_build -repo_url https://github.com/nicocha30/ligolo-ng "
-        "-provider jenkins -job obfuscate-go -language go -obfuscation garble"
+        "daedalus_obfuscate_build -repo_url https://github.com/nicocha30/ligolo-ng "
+        "-language go -obfuscation garble"
     )
     author = "@Lavender-exe"
-    version = 2
+    version = 4
     script_only = True
     argument_class = ObfuscateBuildArguments
     attackmapping = ["T1027", "T1059", "T1105"]
@@ -234,30 +340,34 @@ class ObfuscateBuild(CommandBase):
             source_path = taskData.args.get_arg("source_path") or ""
             ref = taskData.args.get_arg("ref") or "main"
             tool_type = taskData.args.get_arg("tool_type") or "register_only"
+            nimcrypt2_flags = taskData.args.get_arg("nimcrypt2_flags") or ""
+            signing_profile = taskData.args.get_arg("signing_profile") or "none"
             raw_timeout = taskData.args.get_arg("timeout") or 300
             timeout = int(raw_timeout) if raw_timeout else 300
 
             repo_url = taskData.args.get_arg("repo_url") or os.getenv("REPO_URL", "")
             repo_token = resolve_secret(taskData, "repo_token", "REPO_TOKEN", REPO_TOKEN)
 
-            if not job and language:
-                job = f"loader-{language}"
-                logger.warning("Job auto-resolved from language %r → %s", language, job)
-
             if not job:
-                raise ValueError("job is required")
+                job = "daedalus-tooling-build"
+                logger.warning("Job auto-resolved to shared tooling pipeline: %s", job)
 
             kwargs = resolve_provider_kwargs(taskData, provider_name)
             provider = get_provider(provider_name, **kwargs)
 
             source_display = repo_url or job
+            pipeline_info = f"lang={language}, fmt={output_format}, obf={obfuscation}"
+            if signing_profile != "none":
+                pipeline_info += f", sign={signing_profile}"
+            if nimcrypt2_flags:
+                pipeline_info += f", nim2flags={nimcrypt2_flags}"
             await SendMythicRPCResponseCreate(MythicRPCResponseCreateMessage(
                 TaskID=taskData.Task.ID,
                 Response=(
                     f"Starting obfuscation pipeline:\n"
                     f"  Source: {source_display}/{source_path} @ {ref}\n"
                     f"  Provider: {provider_name}\n"
-                    f"  Pipeline: {job} (lang={language}, fmt={output_format}, obf={obfuscation})"
+                    f"  Pipeline: {job} ({pipeline_info})\n"
                 ).encode(),
             ))
 
@@ -275,6 +385,10 @@ class ObfuscateBuild(CommandBase):
                 build_params["SOURCE_PATH"] = source_path
             if ref:
                 build_params["REF"] = ref
+            if nimcrypt2_flags:
+                build_params["NIMCRYPT2_FLAGS"] = nimcrypt2_flags
+            if signing_profile and signing_profile != "none":
+                build_params["SIGNING_PROFILE"] = signing_profile
 
             build_result = await provider.trigger_build(job, build_params)
             if not build_result.build_id:
@@ -323,14 +437,14 @@ class ObfuscateBuild(CommandBase):
             file_resp = await SendMythicRPCFileCreate(MythicRPCFileCreateMessage(
                 TaskID=taskData.Task.ID,
                 FileContents=artifact_bytes,
-                Filename=artifact_name,
+                Filename=os.path.basename(artifact_name),
                 DeleteAfterFetch=delete_after,
                 Comment=f"Daedalus CA: obfuscated build from {source_display}/{source_path} ({obfuscation})",
             ))
-            if not file_resp.success:
-                raise RuntimeError(f"File upload failed: {file_resp.error}")
+            if not file_resp.Success:
+                raise RuntimeError(f"File upload failed: {file_resp.Error}")
 
-            agent_file_id = file_resp.agent_file_id
+            agent_file_id = file_resp.AgentFileId
             logger.warning("Uploaded to Mythic: %s", agent_file_id)
 
             if tool_type == "register_only":
@@ -353,9 +467,9 @@ class ObfuscateBuild(CommandBase):
                 CallbackID=taskData.Task.CallbackID,
             ))
 
-            target_payload_type = taskData.payload_type
-            if not target_payload_type and callback_resp.success and callback_resp.results:
-                target_payload_type = getattr(callback_resp.results[0], "payload_type", "") or ""
+            target_payload_type = taskData.PayloadType
+            if not target_payload_type and callback_resp.Success and callback_resp.Results:
+                target_payload_type = getattr(callback_resp.Results[0], "PayloadType", "") or ""
 
             agent_cfg = support.get(target_payload_type, {})
 
@@ -382,7 +496,7 @@ class ObfuscateBuild(CommandBase):
                     f"Obfuscated {artifact_name} ({len(artifact_bytes)} bytes)\n"
                     f"Source: {source_display}/{source_path} @ {ref}\n"
                     f"Pipeline: {provider_name}/{job} #{build_id} (obf={obfuscation})\n"
-                    f"Delegating to {target_payload_type}/{native_cmd}"
+                    f"Delegating to {target_payload_type}/{native_cmd}\n"
                 ).encode(),
             ))
 

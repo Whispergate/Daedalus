@@ -29,7 +29,7 @@ sudo ./mythic-cli install folder /path/to/Daedalus
 
 ### Mythic Secrets (Command Augment)
 
-The CA commands (`fetch_execute`, `register_tool`, `obfuscate_build`) resolve CI/CD credentials from **Mythic Secrets** - user-level settings that persist across sessions.
+The CA commands (`daedalus_fetch_execute`, `daedalus_register_tool`, `daedalus_obfuscate_build`) resolve CI/CD credentials from **Mythic Secrets** - user-level settings that persist across sessions.
 
 1. In the Mythic UI, go to **Settings > Secrets** (user icon in the top-right)
 2. Add the secrets for your CI/CD provider(s):
@@ -41,7 +41,7 @@ The CA commands (`fetch_execute`, `register_tool`, `obfuscate_build`) resolve CI
 | `GITLAB_API_KEY` | GitLab private token |
 | `FORGEJO_API_KEY` | Forgejo personal access token |
 | `GITEA_API_KEY` | Gitea personal access token |
-| `REPO_TOKEN` | Access token for private source repos (used by `obfuscate_build`) |
+| `REPO_TOKEN` | Access token for private source repos (used by `daedalus_obfuscate_build`) |
 
 Each operator sets their own secrets. The CA commands check Mythic Secrets before falling back to environment variables, so operators on the same Mythic instance can use different credentials.
 
@@ -88,7 +88,8 @@ The workflows which need to have their environment variables set are:
 |----------|-------------|
 | `JENKINS_URL` | Jenkins base URL (e.g. `https://jenkins.internal:8443`) |
 | `JENKINS_USER` | Jenkins API username |
-| `JENKINS_TOKEN` | Jenkins API token |
+
+> **Note:** `JENKINS_TOKEN` is no longer set in workflow environment variables. Set `JENKINS_API_KEY` as a **Mythic Secret** (Settings > Secrets) for CA commands, or set `JENKINS_TOKEN` as a **container environment variable** in the Daedalus container settings for eventing workflows.
 
 #### Forgejo
 
@@ -132,9 +133,9 @@ After starting Mythic with Daedalus installed:
 ### Command Augment Container
 
 1. Navigate to any active callback from a supported agent (Apollo, Athena, Merlin, Starburst)
-2. You should see `fetch_execute`, `register_tool`, and `obfuscate_build` in the command menu
+2. You should see `daedalus_fetch_execute`, `daedalus_register_tool`, and `daedalus_obfuscate_build` in the command menu
 3. Configure your Mythic Secrets (Settings > Secrets) with CI/CD API tokens
-4. Run `register_tool` against a known CI job to verify connectivity
+4. Run `daedalus_register_tool` against a known CI job to verify connectivity
 
 ### Eventing Container
 

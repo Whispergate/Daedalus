@@ -10,11 +10,11 @@ Daedalus lets operators trigger builds, poll for completion, download artifacts,
 - **GitLab CI/CD**: Pipeline API (trigger, status, job artifacts, trace logs)
 - **Gitea Actions**: Workflow dispatch API (Gitea Acts runner)
 
-Daedalus also includes a **Command Augment (CA) container** that injects CI/CD commands directly into supported agent callbacks (Apollo, Athena, Merlin, Poseidon, Starburst):
+Daedalus also includes a **Command Augment (CA) container** that injects CI/CD commands directly into supported agent callbacks (Apollo, Athena, Merlin, Starburst):
 
-- **fetch_execute**: Fetch a CI/CD artifact and execute it in-memory (BOF or .NET assembly)
-- **register_tool**: Fetch a CI/CD artifact and register it as a Mythic file
-- **obfuscate_build**: Pull source from any Git repo, run it through a CI/CD obfuscation pipeline, then execute or register
+- **daedalus_fetch_execute**: Fetch a CI/CD artifact and execute it in-memory (BOF or .NET assembly)
+- **daedalus_register_tool**: Fetch a CI/CD artifact and register it as a Mythic file
+- **daedalus_obfuscate_build**: Pull source from any Git repo, run it through a CI/CD obfuscation pipeline, then execute or register
 
 ![Daedalus Workflow](documentation-payload/daedalus/DaedalusWorkflow.png)
 
@@ -85,7 +85,7 @@ See `documentation-payload/daedalus/` for full docs:
 - `_index.md`: Overview, supported agents, credential resolution, eventing functions
 - `installation.md`: Setup, Mythic Secrets, environment variables
 - `architecture.md`: Design overview, CA vs eventing, provider abstraction
-- `commands/`: Individual command reference (fetch_execute, register_tool, obfuscate_build)
+- `commands/`: Individual command reference (daedalus_fetch_execute, daedalus_register_tool, daedalus_obfuscate_build)
 
 ## Credits
 

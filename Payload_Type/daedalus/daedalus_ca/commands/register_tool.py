@@ -9,6 +9,7 @@ from mythic_container.MythicCommandBase import (
     CommandBase,
     CommandAttributes,
     CommandParameter,
+    ParameterGroupInfo,
     ParameterType,
     PTTaskMessageAllData,
     PTTaskCreateTaskingMessageResponse,
@@ -45,91 +46,161 @@ class RegisterToolArguments(TaskArguments):
         super().__init__(command_line, **kwargs)
         self.args = [
             CommandParameter(
-                name="provider",
-                type=ParameterType.ChooseOneCustom,
-                description="CI/CD provider to fetch artifacts from",
-                choices=["jenkins", "github", "gitlab", "forgejo", "gitea"],
-                default_value="jenkins",
-            ),
-            CommandParameter(
                 name="job",
                 type=ParameterType.String,
                 description="Job/workflow name to fetch the tool from",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, ui_position=1),
+                ],
+            ),
+            CommandParameter(
+                name="provider",
+                type=ParameterType.ChooseOneCustom,
+                description="CI/CD provider (credentials resolved from Mythic Secrets)",
+                choices=["jenkins", "github", "gitlab", "forgejo", "gitea"],
+                default_value="jenkins",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=2),
+                ],
             ),
             CommandParameter(
                 name="build_id",
                 type=ParameterType.String,
                 description="Build number or run ID (e.g. lastSuccessfulBuild)",
                 default_value="lastSuccessfulBuild",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=3),
+                ],
             ),
             CommandParameter(
                 name="artifact_name",
                 type=ParameterType.String,
                 description="Specific artifact filename (auto-selects binary if empty)",
                 default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=4),
+                ],
             ),
             CommandParameter(
                 name="tool_name",
                 type=ParameterType.String,
                 description="Name to register the tool as in Mythic (defaults to artifact filename)",
                 default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=5),
+                ],
             ),
             CommandParameter(
                 name="comment",
                 type=ParameterType.String,
                 description="Comment to attach to the registered file",
                 default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=6),
+                ],
+            ),
+            # --- Provider credential overrides (all optional, resolved from Mythic Secrets by default) ---
+            CommandParameter(
+                name="jenkins_url", type=ParameterType.String,
+                description="Jenkins server URL (override - normally from Secrets/env)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=20)],
             ),
             CommandParameter(
-                name="jenkins_url", type=ParameterType.String, description="Jenkins server URL", default_value="",
+                name="jenkins_user", type=ParameterType.String,
+                description="Jenkins username (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=21)],
             ),
             CommandParameter(
-                name="jenkins_user", type=ParameterType.String, description="Jenkins username", default_value="",
+                name="jenkins_token", type=ParameterType.String,
+                description="Jenkins API token (override - set JENKINS_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=22)],
             ),
             CommandParameter(
-                name="jenkins_token", type=ParameterType.String, description="Jenkins API token", default_value="",
+                name="github_token", type=ParameterType.String,
+                description="GitHub token (override - set GITHUB_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=23)],
             ),
             CommandParameter(
-                name="github_token", type=ParameterType.String, description="GitHub token", default_value="",
+                name="github_owner", type=ParameterType.String,
+                description="GitHub repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=24)],
             ),
             CommandParameter(
-                name="github_owner", type=ParameterType.String, description="GitHub repo owner", default_value="",
+                name="github_repo", type=ParameterType.String,
+                description="GitHub repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=25)],
             ),
             CommandParameter(
-                name="github_repo", type=ParameterType.String, description="GitHub repo name", default_value="",
+                name="gitlab_url", type=ParameterType.String,
+                description="GitLab server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=26)],
             ),
             CommandParameter(
-                name="gitlab_url", type=ParameterType.String, description="GitLab server URL", default_value="",
+                name="gitlab_token", type=ParameterType.String,
+                description="GitLab token (override - set GITLAB_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=27)],
             ),
             CommandParameter(
-                name="gitlab_token", type=ParameterType.String, description="GitLab token", default_value="",
+                name="gitlab_project_id", type=ParameterType.String,
+                description="GitLab project ID (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=28)],
             ),
             CommandParameter(
-                name="gitlab_project_id", type=ParameterType.String, description="GitLab project ID", default_value="",
+                name="forgejo_url", type=ParameterType.String,
+                description="Forgejo server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=29)],
             ),
             CommandParameter(
-                name="forgejo_url", type=ParameterType.String, description="Forgejo server URL", default_value="",
+                name="forgejo_token", type=ParameterType.String,
+                description="Forgejo token (override - set FORGEJO_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=30)],
             ),
             CommandParameter(
-                name="forgejo_token", type=ParameterType.String, description="Forgejo token", default_value="",
+                name="forgejo_owner", type=ParameterType.String,
+                description="Forgejo repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=31)],
             ),
             CommandParameter(
-                name="forgejo_owner", type=ParameterType.String, description="Forgejo repo owner", default_value="",
+                name="forgejo_repo", type=ParameterType.String,
+                description="Forgejo repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=32)],
             ),
             CommandParameter(
-                name="forgejo_repo", type=ParameterType.String, description="Forgejo repo name", default_value="",
+                name="gitea_url", type=ParameterType.String,
+                description="Gitea server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=33)],
             ),
             CommandParameter(
-                name="gitea_url", type=ParameterType.String, description="Gitea server URL", default_value="",
+                name="gitea_token", type=ParameterType.String,
+                description="Gitea token (override - set GITEA_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=34)],
             ),
             CommandParameter(
-                name="gitea_token", type=ParameterType.String, description="Gitea token", default_value="",
+                name="gitea_owner", type=ParameterType.String,
+                description="Gitea repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=35)],
             ),
             CommandParameter(
-                name="gitea_owner", type=ParameterType.String, description="Gitea repo owner", default_value="",
-            ),
-            CommandParameter(
-                name="gitea_repo", type=ParameterType.String, description="Gitea repo name", default_value="",
+                name="gitea_repo", type=ParameterType.String,
+                description="Gitea repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=36)],
             ),
         ]
 
@@ -143,15 +214,15 @@ class RegisterToolArguments(TaskArguments):
 
 
 class RegisterTool(CommandBase):
-    cmd = "register_tool"
+    cmd = "daedalus_register_tool"
     description = (
-        "Fetch a BOF or .NET assembly from any CI/CD provider (Jenkins, GitHub "
-        "Actions, GitLab CI, Forgejo, Gitea) and register it as a file in "
-        "Mythic for later use by any callback."
+        "Fetch a BOF or .NET assembly from any CI/CD provider and register it "
+        "as a file in Mythic for later use. Credentials are resolved from "
+        "Mythic Secrets automatically."
     )
-    help_cmd = "register_tool -provider jenkins -job loader-c-mingw -tool_name whoami.o"
+    help_cmd = "daedalus_register_tool -job loader-c-mingw"
     author = "@Lavender-exe"
-    version = 2
+    version = 3
     script_only = True
     argument_class = RegisterToolArguments
     attackmapping = ["T1105"]
@@ -198,7 +269,7 @@ class RegisterTool(CommandBase):
             artifact_bytes = await provider.download_artifact(job, build_id, artifact_name)
             logger.warning("Downloaded %s (%d bytes)", artifact_name, len(artifact_bytes))
 
-            filename = tool_name or artifact_name
+            filename = tool_name or os.path.basename(artifact_name)
             file_comment = comment or f"Registered by Daedalus CA from {provider_name}/{job} #{build_id}"
 
             file_resp = await SendMythicRPCFileCreate(MythicRPCFileCreateMessage(
@@ -208,10 +279,10 @@ class RegisterTool(CommandBase):
                 DeleteAfterFetch=False,
                 Comment=file_comment,
             ))
-            if not file_resp.success:
-                raise RuntimeError(f"File registration failed: {file_resp.error}")
+            if not file_resp.Success:
+                raise RuntimeError(f"File registration failed: {file_resp.Error}")
 
-            agent_file_id = file_resp.agent_file_id
+            agent_file_id = file_resp.AgentFileId
             logger.warning("Registered tool %s → %s", filename, agent_file_id)
 
             await SendMythicRPCResponseCreate(MythicRPCResponseCreateMessage(

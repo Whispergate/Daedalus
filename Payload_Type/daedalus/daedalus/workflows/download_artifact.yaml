@@ -7,7 +7,6 @@ environment:
     JOB: ""
     JENKINS_URL: http://10.5.99.3:8080
     JENKINS_USER: admin
-    JENKINS_TOKEN: admin
     LANGUAGE: c-mingw
     BUILD_ID: ""
     ARTIFACT_NAME: ""

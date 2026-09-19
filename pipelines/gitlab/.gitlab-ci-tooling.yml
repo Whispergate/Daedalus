@@ -1,0 +1,159 @@
+# GitLab CI pipeline for Daedalus daedalus_obfuscate_build.
+#
+# Clones a third-party repo, compiles it, optionally obfuscates,
+# and uploads the artifact. Does NOT fetch shellcode from Mythic.
+#
+# Daedalus triggers this via the pipeline API with variables.
+# Runs on a runner tagged "maas" with your build toolchain installed.
+
+stages:
+  - clone
+  - build
+  - obfuscate
+
+variables:
+  REPO_URL: ""
+  REPO_TOKEN: ""
+  REF: "main"
+  SOURCE_PATH: ""
+  LANGUAGE: "csharp"
+  OUTPUT_FORMAT: "exe"
+  OBFUSCATION: "none"
+  NIMCRYPT2_FLAGS: ""
+
+clone_repo:
+  stage: clone
+  tags:
+    - maas
+  script:
+    - |
+      CLONE_URL="$REPO_URL"
+      if [ -n "$REPO_TOKEN" ]; then
+        CLONE_URL="${CLONE_URL/https:\/\//https://token:${REPO_TOKEN}@}"
+      fi
+      git clone --depth 1 --branch "$REF" "$CLONE_URL" repo
+      echo "[+] Cloned ${REPO_URL} @ ${REF}"
+
+  artifacts:
+    paths:
+      - repo/
+    expire_in: 1 hour
+
+build_tool:
+  stage: build
+  tags:
+    - maas
+  script:
+    - mkdir -p build
+    - cd "repo/${SOURCE_PATH:-.}"
+
+    - echo "[*] Language=${LANGUAGE} Format=${OUTPUT_FORMAT}"
+
+    - |
+      case "$LANGUAGE" in
+        csharp)
+          TARGET=$(find . -maxdepth 3 -name '*.sln' | head -1)
+          [ -z "$TARGET" ] && TARGET=$(find . -maxdepth 3 -name '*.csproj' | head -1)
+          [ -z "$TARGET" ] && { echo "[-] No .sln or .csproj found"; exit 1; }
+          echo "[*] Building $TARGET"
+          dotnet build "$TARGET" -c Release -o ${CI_PROJECT_DIR}/build
+          ;;
+        go)
+          GOOS=windows GOARCH=amd64 go build \
+            -ldflags="-s -w" \
+            -o ${CI_PROJECT_DIR}/build/ \
+            ./...
+          ;;
+        rust)
+          cargo build --release --target x86_64-pc-windows-gnu
+          cp target/x86_64-pc-windows-gnu/release/*.exe ${CI_PROJECT_DIR}/build/ 2>/dev/null || true
+          cp target/x86_64-pc-windows-gnu/release/*.dll ${CI_PROJECT_DIR}/build/ 2>/dev/null || true
+          ;;
+        c-mingw)
+          if [ -f Makefile ]; then
+            make CC=x86_64-w64-mingw32-gcc
+            find . -maxdepth 2 \( -name '*.exe' -o -name '*.dll' \) \
+              -exec cp {} ${CI_PROJECT_DIR}/build/ \;
+          else
+            SOURCES=$(find . -name '*.c' -not -path './build/*' | sort | tr '\n' ' ')
+            x86_64-w64-mingw32-gcc -o ${CI_PROJECT_DIR}/build/tool.exe $SOURCES -s -O2
+          fi
+          ;;
+        cpp-mingw)
+          if [ -f Makefile ]; then
+            make CXX=x86_64-w64-mingw32-g++
+            find . -maxdepth 2 \( -name '*.exe' -o -name '*.dll' \) \
+              -exec cp {} ${CI_PROJECT_DIR}/build/ \;
+          else
+            SOURCES=$(find . -name '*.cpp' -o -name '*.cc' | sort | tr '\n' ' ')
+            x86_64-w64-mingw32-g++ -o ${CI_PROJECT_DIR}/build/tool.exe $SOURCES -s -O2 -static
+          fi
+          ;;
+        nim)
+          ENTRY=$(find . -maxdepth 2 -name '*.nim' | head -1)
+          nim c -d:mingw -d:release -d:strip \
+            --opt:size --app:gui \
+            -o:${CI_PROJECT_DIR}/build/tool.exe "$ENTRY"
+          ;;
+        *)
+          echo "[-] Unknown language: $LANGUAGE"
+          exit 1
+          ;;
+      esac
+
+    - echo "[+] Build complete"
+    - ls -la ${CI_PROJECT_DIR}/build/
+
+  artifacts:
+    name: "${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - build/
+    expire_in: 1 day
+
+obfuscate_tool:
+  stage: obfuscate
+  tags:
+    - maas
+  rules:
+    - if: '$OBFUSCATION != "none"'
+  script:
+    - echo "[*] Obfuscation=${OBFUSCATION} Language=${LANGUAGE}"
+
+    - |
+      if [ "$OBFUSCATION" = "nimcrypt2" ]; then
+        NIM_TYPE="pe"
+        [ "$LANGUAGE" = "csharp" ] && NIM_TYPE="csharp"
+        for f in build/*.exe; do
+          [ -f "$f" ] || continue
+          echo "[*] Packing $f with Nimcrypt2 (-t $NIM_TYPE)"
+          nimcrypt -f "$f" -t "$NIM_TYPE" -o "${f%.exe}-packed.exe" -u -e -g $NIMCRYPT2_FLAGS
+          mv "${f%.exe}-packed.exe" "$f"
+        done
+      else
+        case "$LANGUAGE" in
+          csharp)
+            echo "[!] C# obfuscation stub — install ConfuserEx and uncomment"
+            # for f in build/*.exe build/*.dll; do
+            #   Confuser.CLI.exe -n confuser.crproj
+            # done
+            ;;
+          go)
+            if [ "$OBFUSCATION" = "garble" ]; then
+              cd "repo/${SOURCE_PATH:-.}"
+              GOOS=windows GOARCH=amd64 garble -literals -tiny build \
+                -ldflags="-s -w" \
+                -o ${CI_PROJECT_DIR}/build/ \
+                ./...
+            fi
+            ;;
+          *)
+            echo "[!] No obfuscation handler for ${LANGUAGE}/${OBFUSCATION}"
+            ;;
+        esac
+      fi
+
+  artifacts:
+    name: "${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - build/
+    expire_in: 1 day

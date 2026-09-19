@@ -1,0 +1,247 @@
+// Jenkins pipeline for Daedalus daedalus_obfuscate_build command.
+//
+// Clones a third-party repo, compiles it, optionally obfuscates the
+// output, and archives the artifact. Does NOT fetch shellcode from
+// Mythic — this is for standalone tool compilation.
+//
+// Daedalus calls buildWithParameters on this job.
+// Runs on a node labeled "maas" with your build toolchain installed.
+
+pipeline {
+    agent { label 'maas' }
+
+    parameters {
+        string(name: 'REPO_URL',       defaultValue: '',     description: 'Git clone URL of the tool repo')
+        password(name: 'REPO_TOKEN',   defaultValue: '',     description: 'Access token for private repos (HTTP basic auth)')
+        string(name: 'REF',           defaultValue: 'main',  description: 'Branch or tag to checkout')
+        string(name: 'SOURCE_PATH',   defaultValue: '',      description: 'Subdirectory or file to compile (empty = repo root)')
+        string(name: 'LANGUAGE',      defaultValue: 'csharp', description: 'Build language: csharp, go, rust, c-mingw, cpp-mingw, nim')
+        string(name: 'OUTPUT_FORMAT', defaultValue: 'exe',   description: 'Output format: exe, dll, bin, shellcode, svc')
+        string(name: 'OBFUSCATION',   defaultValue: 'none',  description: 'Obfuscation level: none, basic, full, garble, nimcrypt2')
+        string(name: 'NIMCRYPT2_FLAGS', defaultValue: '',    description: 'Extra Nimcrypt2 flags (e.g. -l for OLLVM, -s to skip sandbox checks)')
+    }
+
+    stages {
+        stage('Clone') {
+            steps {
+                script {
+                    def cloneUrl = params.REPO_URL
+                    if (params.REPO_TOKEN?.trim()) {
+                        cloneUrl = cloneUrl.replaceFirst('https://', "https://token:${params.REPO_TOKEN}@")
+                    }
+                    sh "git clone --depth 1 --branch '${params.REF}' '${cloneUrl}' repo"
+                }
+                dir('repo') {
+                    echo "[+] Cloned ${params.REPO_URL} @ ${params.REF}"
+                    sh 'ls -la'
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("repo/${params.SOURCE_PATH ?: '.'}") {
+                    sh 'mkdir -p ${WORKSPACE}/build'
+
+                    echo "[*] Language=${params.LANGUAGE} Format=${params.OUTPUT_FORMAT}"
+
+                    script {
+                        switch (params.LANGUAGE) {
+                            case 'csharp':
+                                // ---- C# / .NET build ----
+                                // Finds the first .sln or .csproj and builds it.
+                                // Adjust -r and --self-contained as needed.
+                                sh '''
+                                    TARGET=$(find . -maxdepth 3 -name '*.sln' | head -1)
+                                    if [ -z "$TARGET" ]; then
+                                        TARGET=$(find . -maxdepth 3 -name '*.csproj' | head -1)
+                                    fi
+                                    if [ -z "$TARGET" ]; then
+                                        echo "[-] No .sln or .csproj found"; exit 1
+                                    fi
+                                    echo "[*] Building $TARGET"
+                                    dotnet build "$TARGET" -c Release -o ${WORKSPACE}/build
+                                '''
+                                break
+
+                            case 'go':
+                                // ---- Go build ----
+                                // Cross-compiles for Windows amd64.
+                                sh '''
+                                    GOOS=windows GOARCH=amd64 go build \
+                                        -ldflags="-s -w" \
+                                        -o ${WORKSPACE}/build/ \
+                                        ./...
+                                '''
+                                break
+
+                            case 'rust':
+                                // ---- Rust build ----
+                                // Cross-compiles for Windows via MinGW target.
+                                sh '''
+                                    cargo build --release --target x86_64-pc-windows-gnu
+                                    cp target/x86_64-pc-windows-gnu/release/*.exe ${WORKSPACE}/build/ 2>/dev/null || true
+                                    cp target/x86_64-pc-windows-gnu/release/*.dll ${WORKSPACE}/build/ 2>/dev/null || true
+                                '''
+                                break
+
+                            case 'c-mingw':
+                                // ---- C cross-compile with MinGW ----
+                                // Adapts to Makefile, CMake, or bare sources.
+                                sh '''
+                                    if [ -f Makefile ]; then
+                                        make CC=x86_64-w64-mingw32-gcc
+                                        find . -maxdepth 2 \\( -name '*.exe' -o -name '*.dll' \\) \
+                                            -exec cp {} ${WORKSPACE}/build/ \\;
+                                    else
+                                        SOURCES=$(find . -name '*.c' -not -path './build/*' | sort | tr '\\n' ' ')
+                                        x86_64-w64-mingw32-gcc -o ${WORKSPACE}/build/tool.exe \
+                                            $SOURCES -s -O2
+                                    fi
+                                '''
+                                break
+
+                            case 'cpp-mingw':
+                                // ---- C++ cross-compile with MinGW ----
+                                sh '''
+                                    if [ -f Makefile ]; then
+                                        make CXX=x86_64-w64-mingw32-g++
+                                        find . -maxdepth 2 \\( -name '*.exe' -o -name '*.dll' \\) \
+                                            -exec cp {} ${WORKSPACE}/build/ \\;
+                                    else
+                                        SOURCES=$(find . -name '*.cpp' -o -name '*.cc' | sort | tr '\\n' ' ')
+                                        x86_64-w64-mingw32-g++ -o ${WORKSPACE}/build/tool.exe \
+                                            $SOURCES -s -O2 -static
+                                    fi
+                                '''
+                                break
+
+                            case 'nim':
+                                // ---- Nim cross-compile ----
+                                sh '''
+                                    ENTRY=$(find . -maxdepth 2 -name '*.nim' | head -1)
+                                    nim c -d:mingw -d:release -d:strip \
+                                        --opt:size --app:gui \
+                                        -o:${WORKSPACE}/build/tool.exe "$ENTRY"
+                                '''
+                                break
+
+                            default:
+                                echo "[-] Unknown language: ${params.LANGUAGE}"
+                                sh 'exit 1'
+                        }
+                    }
+
+                    echo '[+] Build complete'
+                    sh 'ls -la ${WORKSPACE}/build/'
+                }
+            }
+        }
+
+        stage('Obfuscate') {
+            when {
+                expression { params.OBFUSCATION != 'none' }
+            }
+            steps {
+                echo "[*] Obfuscation=${params.OBFUSCATION} Language=${params.LANGUAGE}"
+
+                script {
+                    if (params.LANGUAGE == 'csharp') {
+                        switch (params.OBFUSCATION) {
+                            case 'basic':
+                                // ---- ConfuserEx basic ----
+                                // Rename + control flow only.
+                                // Requires: Confuser.CLI.exe on PATH or dotnet Confuser.CLI.dll
+                                sh '''
+                                    for f in build/*.exe build/*.dll; do
+                                        [ -f "$f" ] || continue
+                                        cat > /tmp/confuser.crproj <<CRPROJ
+<project outputDir="./build-obf" baseDir="." xmlns="http://confuser.codeplex.com">
+  <rule pattern="true">
+    <protection id="rename" />
+    <protection id="ctrl flow" />
+  </rule>
+  <module path="$f" />
+</project>
+CRPROJ
+                                        Confuser.CLI.exe -n /tmp/confuser.crproj || \
+                                            dotnet /opt/confuserex/Confuser.CLI.dll /tmp/confuser.crproj
+                                    done
+                                    cp build-obf/* build/ 2>/dev/null || true
+                                '''
+                                break
+
+                            case 'full':
+                                // ---- ConfuserEx full ----
+                                // All protections enabled.
+                                sh '''
+                                    for f in build/*.exe build/*.dll; do
+                                        [ -f "$f" ] || continue
+                                        cat > /tmp/confuser.crproj <<CRPROJ
+<project outputDir="./build-obf" baseDir="." xmlns="http://confuser.codeplex.com">
+  <rule pattern="true">
+    <protection id="ctrl flow" />
+    <protection id="ref proxy" />
+    <protection id="rename" />
+    <protection id="anti debug" />
+    <protection id="constants" />
+    <protection id="resources" />
+  </rule>
+  <module path="$f" />
+</project>
+CRPROJ
+                                        Confuser.CLI.exe -n /tmp/confuser.crproj || \
+                                            dotnet /opt/confuserex/Confuser.CLI.dll /tmp/confuser.crproj
+                                    done
+                                    cp build-obf/* build/ 2>/dev/null || true
+                                '''
+                                break
+
+                            default:
+                                echo "[!] Unknown C# obfuscation: ${params.OBFUSCATION}, skipping"
+                        }
+
+                    } else if (params.LANGUAGE == 'go' && params.OBFUSCATION == 'garble') {
+                        // ---- Garble for Go ----
+                        // Rebuild with garble wrapping the go toolchain.
+                        dir("repo/${params.SOURCE_PATH ?: '.'}") {
+                            sh '''
+                                GOOS=windows GOARCH=amd64 garble -literals -tiny build \
+                                    -ldflags="-s -w" \
+                                    -o ${WORKSPACE}/build/ \
+                                    ./...
+                            '''
+                        }
+
+                    } else if (params.OBFUSCATION == 'nimcrypt2') {
+                        def nimType = (params.LANGUAGE == 'csharp') ? 'csharp' : 'pe'
+                        def extraFlags = params.NIMCRYPT2_FLAGS ?: ''
+                        sh """
+                            for f in build/*.exe; do
+                                [ -f "\$f" ] || continue
+                                echo "[*] Packing \$f with Nimcrypt2 (-t ${nimType})"
+                                nimcrypt -f "\$f" -t ${nimType} -o "\${f%.exe}-packed.exe" -u -e -g ${extraFlags}
+                                mv "\${f%.exe}-packed.exe" "\$f"
+                            done
+                        """
+
+                    } else {
+                        echo "[!] No obfuscation handler for ${params.LANGUAGE}/${params.OBFUSCATION}, skipping"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            archiveArtifacts artifacts: 'build/**', fingerprint: true
+        }
+        failure {
+            echo '[-] Build failed'
+        }
+        cleanup {
+            sh 'rm -rf repo/ build-obf/ || true'
+        }
+    }
+}

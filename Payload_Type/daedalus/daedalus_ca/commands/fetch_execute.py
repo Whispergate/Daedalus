@@ -9,6 +9,7 @@ from mythic_container.MythicCommandBase import (
     CommandBase,
     CommandAttributes,
     CommandParameter,
+    ParameterGroupInfo,
     ParameterType,
     PTTaskMessageAllData,
     PTTaskCreateTaskingMessageResponse,
@@ -59,28 +60,12 @@ class FetchExecuteArguments(TaskArguments):
         super().__init__(command_line, **kwargs)
         self.args = [
             CommandParameter(
-                name="provider",
-                type=ParameterType.ChooseOneCustom,
-                description="CI/CD provider to fetch artifacts from",
-                choices=["jenkins", "github", "gitlab", "forgejo", "gitea"],
-                default_value="jenkins",
-            ),
-            CommandParameter(
                 name="job",
                 type=ParameterType.String,
                 description="Job/workflow name (e.g. loader-c-mingw, build.yml)",
-            ),
-            CommandParameter(
-                name="build_id",
-                type=ParameterType.String,
-                description="Build number or run ID (e.g. lastSuccessfulBuild, latest)",
-                default_value="lastSuccessfulBuild",
-            ),
-            CommandParameter(
-                name="artifact_name",
-                type=ParameterType.String,
-                description="Specific artifact filename (auto-selects binary if empty)",
-                default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, ui_position=1),
+                ],
             ),
             CommandParameter(
                 name="tool_type",
@@ -88,69 +73,158 @@ class FetchExecuteArguments(TaskArguments):
                 description="Type of tool to execute in-memory",
                 choices=["bof", "assembly"],
                 default_value="bof",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, ui_position=2),
+                ],
+            ),
+            CommandParameter(
+                name="provider",
+                type=ParameterType.ChooseOneCustom,
+                description="CI/CD provider (credentials resolved from Mythic Secrets)",
+                choices=["jenkins", "github", "gitlab", "forgejo", "gitea"],
+                default_value="jenkins",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=3),
+                ],
+            ),
+            CommandParameter(
+                name="build_id",
+                type=ParameterType.String,
+                description="Build number or run ID (e.g. lastSuccessfulBuild, latest)",
+                default_value="lastSuccessfulBuild",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=4),
+                ],
+            ),
+            CommandParameter(
+                name="artifact_name",
+                type=ParameterType.String,
+                description="Specific artifact filename (auto-selects binary if empty)",
+                default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=5),
+                ],
             ),
             CommandParameter(
                 name="bof_args",
                 type=ParameterType.String,
-                description="Arguments to pass to the BOF (packed format, optional)",
+                description="Arguments to pass to the BOF (packed format)",
                 default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=6),
+                ],
             ),
             CommandParameter(
                 name="assembly_args",
                 type=ParameterType.String,
                 description="Arguments to pass to the .NET assembly (space-separated)",
                 default_value="",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, ui_position=7),
+                ],
+            ),
+            # --- Provider credential overrides (all optional, resolved from Mythic Secrets by default) ---
+            CommandParameter(
+                name="jenkins_url", type=ParameterType.String,
+                description="Jenkins server URL (override - normally from Secrets/env)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=20)],
             ),
             CommandParameter(
-                name="jenkins_url", type=ParameterType.String, description="Jenkins server URL", default_value="",
+                name="jenkins_user", type=ParameterType.String,
+                description="Jenkins username (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=21)],
             ),
             CommandParameter(
-                name="jenkins_user", type=ParameterType.String, description="Jenkins username", default_value="",
+                name="jenkins_token", type=ParameterType.String,
+                description="Jenkins API token (override - set JENKINS_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=22)],
             ),
             CommandParameter(
-                name="jenkins_token", type=ParameterType.String, description="Jenkins API token", default_value="",
+                name="github_token", type=ParameterType.String,
+                description="GitHub token (override - set GITHUB_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=23)],
             ),
             CommandParameter(
-                name="github_token", type=ParameterType.String, description="GitHub token", default_value="",
+                name="github_owner", type=ParameterType.String,
+                description="GitHub repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=24)],
             ),
             CommandParameter(
-                name="github_owner", type=ParameterType.String, description="GitHub repo owner", default_value="",
+                name="github_repo", type=ParameterType.String,
+                description="GitHub repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=25)],
             ),
             CommandParameter(
-                name="github_repo", type=ParameterType.String, description="GitHub repo name", default_value="",
+                name="gitlab_url", type=ParameterType.String,
+                description="GitLab server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=26)],
             ),
             CommandParameter(
-                name="gitlab_url", type=ParameterType.String, description="GitLab server URL", default_value="",
+                name="gitlab_token", type=ParameterType.String,
+                description="GitLab token (override - set GITLAB_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=27)],
             ),
             CommandParameter(
-                name="gitlab_token", type=ParameterType.String, description="GitLab token", default_value="",
+                name="gitlab_project_id", type=ParameterType.String,
+                description="GitLab project ID (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=28)],
             ),
             CommandParameter(
-                name="gitlab_project_id", type=ParameterType.String, description="GitLab project ID", default_value="",
+                name="forgejo_url", type=ParameterType.String,
+                description="Forgejo server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=29)],
             ),
             CommandParameter(
-                name="forgejo_url", type=ParameterType.String, description="Forgejo server URL", default_value="",
+                name="forgejo_token", type=ParameterType.String,
+                description="Forgejo token (override - set FORGEJO_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=30)],
             ),
             CommandParameter(
-                name="forgejo_token", type=ParameterType.String, description="Forgejo token", default_value="",
+                name="forgejo_owner", type=ParameterType.String,
+                description="Forgejo repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=31)],
             ),
             CommandParameter(
-                name="forgejo_owner", type=ParameterType.String, description="Forgejo repo owner", default_value="",
+                name="forgejo_repo", type=ParameterType.String,
+                description="Forgejo repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=32)],
             ),
             CommandParameter(
-                name="forgejo_repo", type=ParameterType.String, description="Forgejo repo name", default_value="",
+                name="gitea_url", type=ParameterType.String,
+                description="Gitea server URL (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=33)],
             ),
             CommandParameter(
-                name="gitea_url", type=ParameterType.String, description="Gitea server URL", default_value="",
+                name="gitea_token", type=ParameterType.String,
+                description="Gitea token (override - set GITEA_API_KEY in Mythic Secrets instead)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=34)],
             ),
             CommandParameter(
-                name="gitea_token", type=ParameterType.String, description="Gitea token", default_value="",
+                name="gitea_owner", type=ParameterType.String,
+                description="Gitea repo owner (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=35)],
             ),
             CommandParameter(
-                name="gitea_owner", type=ParameterType.String, description="Gitea repo owner", default_value="",
-            ),
-            CommandParameter(
-                name="gitea_repo", type=ParameterType.String, description="Gitea repo name", default_value="",
+                name="gitea_repo", type=ParameterType.String,
+                description="Gitea repo name (override)",
+                default_value="",
+                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=36)],
             ),
         ]
 
@@ -164,15 +238,15 @@ class FetchExecuteArguments(TaskArguments):
 
 
 class FetchExecute(CommandBase):
-    cmd = "fetch_execute"
+    cmd = "daedalus_fetch_execute"
     description = (
-        "Fetch a CI/CD artifact from any supported provider (Jenkins, GitHub "
-        "Actions, GitLab CI, Forgejo, Gitea) and execute it in-memory on the "
-        "target callback. Supports BOFs and .NET assemblies."
+        "Fetch a CI/CD artifact and execute it in-memory on the target callback. "
+        "Supports BOFs and .NET assemblies. Credentials are resolved from Mythic "
+        "Secrets automatically - only fill in provider overrides if needed."
     )
-    help_cmd = "fetch_execute -provider jenkins -job loader-c-mingw -tool_type bof"
+    help_cmd = "daedalus_fetch_execute -job loader-c-mingw -tool_type bof"
     author = "@Lavender-exe"
-    version = 2
+    version = 3
     script_only = True
     argument_class = FetchExecuteArguments
     attackmapping = ["T1105", "T1059"]
@@ -223,14 +297,14 @@ class FetchExecute(CommandBase):
             file_resp = await SendMythicRPCFileCreate(MythicRPCFileCreateMessage(
                 TaskID=taskData.Task.ID,
                 FileContents=artifact_bytes,
-                Filename=artifact_name,
+                Filename=os.path.basename(artifact_name),
                 DeleteAfterFetch=True,
                 Comment=f"Daedalus CA: fetched from {provider_name}/{job} #{build_id}",
             ))
-            if not file_resp.success:
-                raise RuntimeError(f"File upload failed: {file_resp.error}")
+            if not file_resp.Success:
+                raise RuntimeError(f"File upload failed: {file_resp.Error}")
 
-            agent_file_id = file_resp.agent_file_id
+            agent_file_id = file_resp.AgentFileId
             logger.warning("Uploaded to Mythic: %s", agent_file_id)
 
             support = _load_support()
@@ -238,9 +312,9 @@ class FetchExecute(CommandBase):
                 CallbackID=taskData.Task.CallbackID,
             ))
 
-            target_payload_type = taskData.payload_type
-            if not target_payload_type and callback_resp.success and callback_resp.results:
-                target_payload_type = getattr(callback_resp.results[0], "payload_type", "") or ""
+            target_payload_type = taskData.PayloadType
+            if not target_payload_type and callback_resp.Success and callback_resp.Results:
+                target_payload_type = getattr(callback_resp.Results[0], "PayloadType", "") or ""
 
             agent_cfg = support.get(target_payload_type, {})
 
