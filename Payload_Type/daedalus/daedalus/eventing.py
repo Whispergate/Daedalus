@@ -88,6 +88,19 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         "build_id": "BUILD_ID",
         "artifact_name": "ARTIFACT_NAME",
         "include_log": "INCLUDE_LOG",
+        "nimcrypt2_flags": "NIMCRYPT2_FLAGS",
+        "signing_profile": "SIGNING_PROFILE",
+        "pe_sanitise": "PE_SANITISE",
+        "target_arch": "TARGET_ARCH",
+        "operator_id": "OPERATOR_ID",
+        "campaign_tag": "CAMPAIGN_TAG",
+        "litterbox_scan": "LITTERBOX_SCAN",
+        "shellcode_source": "SHELLCODE_SOURCE",
+        "mythic_payload_uuid": "MYTHIC_PAYLOAD_UUID",
+        "repo_url": "REPO_URL",
+        "repo_token": "REPO_TOKEN",
+        "source_path": "SOURCE_PATH",
+        "ref": "REF",
         # Provider connection details (keyed with provider prefix so
         # _provider_kwargs_from_inputs finds them via inputs.get("jenkins_url") etc.)
         "jenkins_url": "JENKINS_URL",
@@ -1149,8 +1162,16 @@ async def _tag_payload_with_build(
 _BUILD_PARAM_KEYS = {
     "language", "format", "output_format", "obfuscation",
     "shellcode_path", "scan", "scan_type", "ref", "workflow",
+    "nimcrypt2_flags", "signing_profile", "pe_sanitise",
+    "target_arch", "operator_id", "campaign_tag",
+    "litterbox_scan", "shellcode_source", "mythic_payload_uuid",
+    "repo_url", "repo_token", "source_path",
     "LANGUAGE", "FORMAT", "OUTPUT_FORMAT", "OBFUSCATION",
-    "SHELLCODE_PATH", "SCAN", "SCAN_TYPE",
+    "SHELLCODE_PATH", "SCAN", "SCAN_TYPE", "REF",
+    "NIMCRYPT2_FLAGS", "SIGNING_PROFILE", "PE_SANITISE",
+    "TARGET_ARCH", "OPERATOR_ID", "CAMPAIGN_TAG",
+    "LITTERBOX_SCAN", "SHELLCODE_SOURCE", "MYTHIC_PAYLOAD_UUID",
+    "REPO_URL", "REPO_TOKEN", "SOURCE_PATH",
 }
 
 
@@ -1162,6 +1183,15 @@ def _extract_build_params(inputs: dict) -> dict[str, str]:
         elif key in _BUILD_PARAM_KEYS:
             params[key.upper()] = str(val)
     return params
+
+
+_SECRET_KEY_ENV_FALLBACK = {
+    "jenkins": "JENKINS_API_KEY",
+    "github": "GITHUB_API_KEY",
+    "gitlab": "GITLAB_API_KEY",
+    "forgejo": "FORGEJO_API_KEY",
+    "gitea": "GITEA_API_KEY",
+}
 
 
 def _provider_kwargs_from_inputs(inputs: dict, provider_name: str) -> dict:
@@ -1206,6 +1236,12 @@ def _provider_kwargs_from_inputs(inputs: dict, provider_name: str) -> dict:
             or inputs.get(param)
             or os.getenv(env_var, "")
         )
+        if not val and param == "token":
+            secret_env = _SECRET_KEY_ENV_FALLBACK.get(provider_name)
+            if secret_env:
+                val = os.getenv(secret_env, "")
+                if val:
+                    logger.warning("Token resolved from %s env var", secret_env)
         if val:
             kwargs[param] = val
 

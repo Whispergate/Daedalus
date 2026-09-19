@@ -142,7 +142,7 @@ jobs:
           else
             case "${{ inputs.LANGUAGE }}" in
               csharp)
-                echo "[!] C# obfuscation stub — install ConfuserEx and uncomment"
+                echo "[!] C# obfuscation stub - install ConfuserEx and uncomment"
                 # for f in build/*.exe build/*.dll; do
                 #   Confuser.CLI.exe -n confuser.crproj
                 # done

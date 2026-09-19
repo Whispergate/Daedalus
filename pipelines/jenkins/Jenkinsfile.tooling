@@ -2,7 +2,7 @@
 //
 // Clones a third-party repo, compiles it, optionally obfuscates the
 // output, and archives the artifact. Does NOT fetch shellcode from
-// Mythic — this is for standalone tool compilation.
+// Mythic - this is for standalone tool compilation.
 //
 // Daedalus calls buildWithParameters on this job.
 // Runs on a node labeled "maas" with your build toolchain installed.

@@ -33,18 +33,43 @@ class JenkinsProvider(CIProvider):
         self.base_url = url.rstrip("/")
         self.auth = (user, token) if user and token else None
         self.verify_ssl = verify_ssl
+        self._crumb_header: str = ""
+        self._crumb_value: str = ""
         logger.warning(
             "JenkinsProvider init: base_url=%r auth=%s",
             self.base_url, "set" if self.auth else "none",
         )
 
     def _client(self, timeout: float = 30) -> httpx.AsyncClient:
+        headers = {"Accept": "application/json"}
+        if self._crumb_header and self._crumb_value:
+            headers[self._crumb_header] = self._crumb_value
         return httpx.AsyncClient(
             auth=self.auth,
             verify=self.verify_ssl,
             timeout=timeout,
-            headers={"Accept": "application/json"},
+            headers=headers,
         )
+
+    async def _fetch_crumb(self) -> None:
+        try:
+            async with httpx.AsyncClient(
+                auth=self.auth, verify=self.verify_ssl, timeout=10,
+            ) as client:
+                r = await client.get(
+                    f"{self.base_url}/crumbIssuer/api/json",
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    self._crumb_header = data.get("crumbRequestField", "Jenkins-Crumb")
+                    self._crumb_value = data.get("crumb", "")
+                    logger.warning("Fetched Jenkins crumb: %s", self._crumb_header)
+                elif r.status_code == 404:
+                    logger.warning("Jenkins CSRF protection disabled (no crumb issuer)")
+                else:
+                    logger.warning("Crumb fetch failed: HTTP %d", r.status_code)
+        except httpx.HTTPError as exc:
+            logger.warning("Crumb fetch error: %r", exc)
 
     async def trigger_build(
         self,
@@ -52,6 +77,9 @@ class JenkinsProvider(CIProvider):
         parameters: dict[str, str],
     ) -> BuildResult:
         job_path = _job_path(job)
+
+        if not self._crumb_value:
+            await self._fetch_crumb()
 
         async with self._client() as client:
             if parameters:

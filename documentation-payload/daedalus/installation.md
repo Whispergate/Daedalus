@@ -53,7 +53,7 @@ Upload each file from `Payload_Type/daedalus/daedalus/workflows/*.yaml`:
 
 ![Eventing Upload](/agents/daedalus/image.png)
 
-**Note:** The `build_and_scan.yaml` workflow calls Daedalus's unified `build_and_scan` function which handles the full pipeline (build, artifact download, Mythic upload, LitterBox scan) in a single step. The `scan_payload.yaml` workflow calls Sphinx's `execute_script` function directly. If Sphinx is not available, use Daedalus's `scan_payload` custom function with `method=direct` and a `LITTERBOX_URL` instead.
+**Note:** The `build_and_scan.yaml` workflow calls Daedalus's unified `build_and_scan` function which handles the full pipeline (build, artifact download, Mythic upload, LitterBox scan) in a single step. The `scan_payload.yaml` workflow calls Daedalus's `scan_payload` function, which delegates to Sphinx by default (`SCAN_METHOD=sphinx`). If Sphinx is not available, set `SCAN_METHOD=direct` and provide a `LITTERBOX_URL` to call LitterBox directly.
 
 ### Environment Variables (Eventing)
 
@@ -64,8 +64,10 @@ Set these in Mythic's Eventing UI for the workflow environment variables:
 
 The workflows which need to have their environment variables set are:
 
-- Daedalus Scan Payload (`LITTERBOX_URL`, `PAYLOAD_UUID`)
-- Daedalus Build and Scan (`LITTERBOX_URL`, `PAYLOAD_UUID`, `LANGUAGE`)
+- Daedalus Scan Payload (`LITTERBOX_URL`, `PAYLOAD_UUID`, `SCAN_METHOD`, `EDR_PROFILE`)
+- Daedalus Build and Scan (`LITTERBOX_URL`, `PAYLOAD_UUID`, `LANGUAGE`, `SIGNING_PROFILE`, `TARGET_ARCH`)
+- Daedalus Manual Build (`LANGUAGE`, `SIGNING_PROFILE`, `TARGET_ARCH`)
+- Daedalus Auto Build (`LANGUAGE`, `SIGNING_PROFILE`, `TARGET_ARCH`)
 
 #### General
 
@@ -76,11 +78,29 @@ The workflows which need to have their environment variables set are:
 
 #### Build Parameters
 
+These match the parameters accepted by Labyrinth's main Jenkinsfile:
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LANGUAGE` | `c-mingw` | Build language/toolchain identifier. Also used for job auto-resolution (`loader-{language}`) |
-| `OUTPUT_FORMAT` | `exe` | Output format passed to the pipeline: `exe`, `dll`, `bin`, `shellcode`, `svc` |
-| `OBFUSCATION` | `none` | Obfuscation profile: `none`, `basic`, `full`, or toolchain-specific name |
+| `LANGUAGE` | `c-mingw` | Build language/toolchain: `c-mingw`, `c-ollvm`, `go-garble`, `rust`, `csharp`. Also used for job auto-resolution (`loader-{language}`) |
+| `OUTPUT_FORMAT` | `exe` | Output format: `exe`, `dll`, `shellcode` |
+| `OBFUSCATION` | `none` | Obfuscation profile: `none`, `ollvm-cff`, `ollvm-bcf-cff`, `ollvm-full`, `ollvm-heavy`, `garble-literals`, `string-encrypt`, `nimcrypt2` |
+| `NIMCRYPT2_FLAGS` | (empty) | Extra Nimcrypt2 flags (e.g. `-l` for OLLVM stub, `-s` to skip sandbox checks) |
+| `SIGNING_PROFILE` | `none` | Limelighter code signing profile: `none`, `microsoft`, `google`, `intel`, `custom` |
+| `PE_SANITISE` | `true` | Strip Rich header, PDB path, debug directory, and version info |
+| `TARGET_ARCH` | `amd64` | Target architecture: `amd64`, `arm64` |
+| `LITTERBOX_SCAN` | `true` | Whether to scan the built artifact via LitterBox |
+| `OPERATOR_ID` | (empty) | Operator callsign for deconfliction tagging |
+| `CAMPAIGN_TAG` | (empty) | Campaign identifier for deconfliction tagging |
+
+#### Scan Parameters
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SCAN_TYPE` | `all` | Scan types to run: `all`, `static`, `dynamic`, `edr` |
+| `SCAN_METHOD` | `sphinx` | How to submit scans: `sphinx` (via Sphinx container) or `direct` (LitterBox API) |
+| `EDR_PROFILE` | (empty) | EDR profile name for EDR-type scans |
+| `LITTERBOX_URL` | `http://10.5.99.12:1337` | LitterBox sandbox URL |
 
 #### Jenkins
 
@@ -89,7 +109,16 @@ The workflows which need to have their environment variables set are:
 | `JENKINS_URL` | Jenkins base URL (e.g. `https://jenkins.internal:8443`) |
 | `JENKINS_USER` | Jenkins API username |
 
-> **Note:** `JENKINS_TOKEN` is no longer set in workflow environment variables. Set `JENKINS_API_KEY` as a **Mythic Secret** (Settings > Secrets) for CA commands, or set `JENKINS_TOKEN` as a **container environment variable** in the Daedalus container settings for eventing workflows.
+> **Note:** Mythic Secrets (Settings > Secrets) are only available to CA commands, not to eventing workflows. For eventing workflows, upload a `.env` file to the Daedalus container via the Mythic UI (**Installed Services > daedalus > Upload File**). The `.env` file is loaded at container startup and makes variables available to both eventing and CA code.
+>
+> Example `.env`:
+> ```
+> JENKINS_API_KEY=your_jenkins_api_token
+> JENKINS_URL=http://10.5.99.3:8080
+> JENKINS_USER=admin
+> ```
+>
+> The eventing container checks: workflow inputs → `JENKINS_TOKEN` env var → `JENKINS_API_KEY` env var (from `.env`). CA commands additionally check Mythic Secrets between task arguments and env vars.
 
 #### Forgejo
 

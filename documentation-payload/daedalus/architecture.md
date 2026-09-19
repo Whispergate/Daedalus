@@ -64,6 +64,12 @@ Daedalus Container
     └─→ Mythic REST API (upload files)
 ```
 
+### Pipeline Parameter Forwarding
+
+Build workflows forward all parameters accepted by Labyrinth's Jenkinsfile, including `LANGUAGE`, `OUTPUT_FORMAT`, `OBFUSCATION`, `NIMCRYPT2_FLAGS`, `SIGNING_PROFILE`, `PE_SANITISE`, `TARGET_ARCH`, `LITTERBOX_SCAN`, `OPERATOR_ID`, and `CAMPAIGN_TAG`. Parameters flow from the workflow environment block through `_resolve_inputs` into `_extract_build_params`, which uppercases them before passing to the CI provider's `trigger_build` method.
+
+The CA container's `daedalus_obfuscate_build` command targets Labyrinth's `Jenkinsfile.tooling` pipeline instead, which accepts `REPO_URL`, `REPO_TOKEN`, `REF`, `SOURCE_PATH`, `LANGUAGE`, `OUTPUT_FORMAT`, `OBFUSCATION`, `NIMCRYPT2_FLAGS`, and `SIGNING_PROFILE`.
+
 ## CA vs Eventing
 
 | Aspect | Eventing Container | CA Container |

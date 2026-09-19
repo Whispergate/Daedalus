@@ -111,7 +111,7 @@ Daedalus also registers an eventing container that exposes seven custom function
 | `check_status` | Check the current status of a CI/CD build |
 | `list_configs` | List available jobs or recent pipeline runs |
 | `download_artifact` | Download a build artifact from CI/CD and upload to Mythic |
-| `scan_payload` | Submit a payload to LitterBox for scanning (fallback when Sphinx is unavailable) |
+| `scan_payload` | Submit a payload to LitterBox for scanning via Sphinx or direct API |
 | `build_and_scan` | Unified pipeline: build, download artifact, upload to Mythic, scan via LitterBox |
 | `get_verdict` | Retrieve Sphinx scan verdicts and Daedalus build tags for a payload |
 
@@ -123,13 +123,32 @@ Seven workflows are registered on container startup:
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| Daedalus Manual Build | `manual` | On-demand build trigger |
+| Daedalus Manual Build | `manual` | On-demand build trigger with full Labyrinth pipeline params |
 | Daedalus Auto Build | `payload_build_finish` | Auto build + scan on new payload |
 | Daedalus Check Build Status | `manual` | Query a running build |
 | Daedalus Download Artifact | `manual` | Pull artifact into Mythic |
 | Daedalus Build and Scan | `manual` | Unified: build, download, upload, scan |
-| Daedalus Scan Payload | `manual` | Submit payload to LitterBox |
+| Daedalus Scan Payload | `manual` | Scan payload via Sphinx or direct LitterBox API |
 | Daedalus Get Verdict | `manual` | Retrieve Sphinx + Daedalus tags |
+
+### Workflow Build Parameters (Labyrinth Alignment)
+
+The build workflows (`Manual Build`, `Auto Build`, `Build and Scan`) forward all parameters accepted by Labyrinth's main Jenkinsfile:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `LANGUAGE` | `c-mingw` | Build language: `c-mingw`, `c-ollvm`, `go-garble`, `rust`, `csharp` |
+| `OUTPUT_FORMAT` | `exe` | Output format: `exe`, `dll`, `shellcode` |
+| `OBFUSCATION` | `none` | Obfuscation profile: `none`, `ollvm-cff`, `ollvm-bcf-cff`, `ollvm-full`, `ollvm-heavy`, `garble-literals`, `string-encrypt`, `nimcrypt2` |
+| `NIMCRYPT2_FLAGS` | (empty) | Extra Nimcrypt2 flags (e.g. `-l` for OLLVM stub, `-s` to skip sandbox) |
+| `SIGNING_PROFILE` | `none` | Limelighter code signing: `none`, `microsoft`, `google`, `intel`, `custom` |
+| `PE_SANITISE` | `true` | Strip Rich header, PDB path, debug info, version info |
+| `TARGET_ARCH` | `amd64` | Target architecture: `amd64`, `arm64` |
+| `LITTERBOX_SCAN` | `true` | Whether to scan the built artifact via LitterBox |
+| `OPERATOR_ID` | (empty) | Operator callsign for deconfliction tagging |
+| `CAMPAIGN_TAG` | (empty) | Campaign identifier for deconfliction tagging |
+
+The `Scan Payload` workflow supports scan method selection (`SCAN_METHOD`: `sphinx` or `direct`) and EDR profile targeting (`EDR_PROFILE`).
 
 ### Payload Tagging
 
