@@ -21,6 +21,7 @@ from mythic_container.SharedClasses import (
 )
 
 from daedalus.providers import BuildStatus, get_provider
+from daedalus_ca.shared import select_artifact
 
 logger = logging.getLogger("daedalus")
 
@@ -28,6 +29,7 @@ _UNRESOLVED_TEMPLATE = re.compile(r"^\{\{.*\}\}$")
 
 _STARTUP_API_TOKEN: str = ""
 _YAML_ENV_DEFAULTS: dict[str, str] = {}
+_VERIFY_SSL: bool = os.getenv("DAEDALUS_VERIFY_SSL", "").lower() in ("1", "true", "yes")
 
 
 def _load_yaml_env_defaults() -> dict[str, str]:
@@ -133,7 +135,7 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
             out[key] = val
 
     if unresolved:
-        logger.warning("Unresolved templates cleared: %s", unresolved)
+        logger.info("Unresolved templates cleared: %s", unresolved)
 
     # Fill blanks from the workflow environment block, then from YAML defaults.
     filled = []
@@ -146,12 +148,12 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
                 filled.append(f"{input_key}={env_key}({source})")
 
     if filled:
-        logger.warning("Inputs filled from defaults: %s", filled)
+        logger.info("Inputs filled from defaults: %s", filled)
 
     # API token: prefer resolved input, then startup token.
     if not out.get("mythic_api_token") and _STARTUP_API_TOKEN:
         out["mythic_api_token"] = _STARTUP_API_TOKEN
-        logger.warning("Using startup API token as fallback")
+        logger.info("Using startup API token as fallback")
 
     # Trigger-sourced payload UUID (payload_build_finish events).
     if not out.get("payload_uuid"):
@@ -162,9 +164,9 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         )
         if trigger_uuid:
             out["payload_uuid"] = trigger_uuid
-            logger.warning("Payload UUID from trigger ActionData: %s", trigger_uuid)
+            logger.info("Payload UUID from trigger ActionData: %s", trigger_uuid)
 
-    logger.warning(
+    logger.info(
         "Resolved inputs: %s",
         {k: (v[:30] + "..." if isinstance(v, str) and len(v) > 30 else v)
          for k, v in out.items() if v},
@@ -250,7 +252,7 @@ query DaedalusFilemeta($agent_file_id: String!) {
 
 async def _upload_file(headers: dict, filename: str, contents: bytes) -> str:
     """Upload a file to Mythic via the REST webhook. Returns agent_file_id."""
-    async with httpx.AsyncClient(verify=False, timeout=30) as client:
+    async with httpx.AsyncClient(verify=_VERIFY_SSL, timeout=30) as client:
         r = await client.post(
             f"{MYTHIC_SERVER}/api/v1.4/task_upload_file_webhook",
             headers={"Authorization": headers.get("Authorization", "")},
@@ -260,7 +262,7 @@ async def _upload_file(headers: dict, filename: str, contents: bytes) -> str:
         data = r.json()
         if data.get("status") != "success":
             raise RuntimeError(f"Upload failed: {data.get('error', data)}")
-        logger.warning("Uploaded %s (%d bytes) → %s", filename, len(contents), data["agent_file_id"])
+        logger.info("Uploaded %s (%d bytes) → %s", filename, len(contents), data["agent_file_id"])
         return data["agent_file_id"]
 
 
@@ -285,7 +287,7 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
 
         if not job and language:
             job = f"loader-{language}"
-            logger.warning("Job auto-resolved from language %r → %s", language, job)
+            logger.info("Job auto-resolved from language %r → %s", language, job)
 
         if not job:
             return _err("'job' input required (CI job/pipeline name)")
@@ -303,19 +305,19 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
                 payload_bytes = await _download_file(auth_headers, agent_file_id)
                 build_params["SHELLCODE_SOURCE"] = f"mythic:{payload_uuid}"
                 build_params["PAYLOAD_SIZE"] = str(len(payload_bytes))
-                logger.warning(
+                logger.info(
                     "Payload %s resolved: %d bytes (%s)",
                     payload_uuid, len(payload_bytes), filename,
                 )
 
-        logger.warning(
+        logger.info(
             "Triggering build on %s - job=%s params=%s provider_kwargs=%s",
             provider_name, job, list(build_params.keys()),
             {k: (v[:20] + "..." if isinstance(v, str) and len(v) > 20 else v)
              for k, v in provider_kwargs.items()},
         )
         result = await provider.trigger_build(job, build_params)
-        logger.warning(
+        logger.info(
             "Build trigger result: status=%s build_id=%s url=%s error=%s",
             result.status.value, result.build_id, result.url, result.error,
         )
@@ -329,18 +331,18 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
         if not poll_build:
             return _ok(f"Build triggered: {provider_name} #{result.build_id} - {result.url}")
 
-        logger.warning(
+        logger.info(
             "Polling build %s #%s (timeout=%ds)", provider_name, result.build_id, poll_timeout,
         )
         final = await _poll_build(provider, job, result.build_id, poll_timeout)
-        logger.warning(
+        logger.info(
             "Build poll complete: status=%s build_id=%s duration=%.0fs error=%s",
             final.status.value, final.build_id,
             final.duration_seconds or 0, final.error,
         )
 
         if final.status == BuildStatus.SUCCESS and payload_int_id and auth_headers:
-            logger.warning("Tagging payload %d with build result", payload_int_id)
+            logger.info("Tagging payload %d with build result", payload_int_id)
             await _tag_payload_with_build(
                 auth_headers, payload_int_id, provider_name, job, final,
             )
@@ -376,7 +378,7 @@ async def check_status(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
 
         if not job and language:
             job = f"loader-{language}"
-            logger.warning("Job auto-resolved from language %r → %s", language, job)
+            logger.info("Job auto-resolved from language %r → %s", language, job)
 
         if not job or not build_id:
             return _err("'job' (or 'language') and 'build_id' inputs required")
@@ -453,7 +455,7 @@ async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingM
 
         if not job and language:
             job = f"loader-{language}"
-            logger.warning("Job auto-resolved from language %r → %s", language, job)
+            logger.info("Job auto-resolved from language %r → %s", language, job)
 
         if not job or not build_id:
             return _err("'job' (or 'language') and 'build_id' inputs required")
@@ -609,6 +611,61 @@ async def _scan_via_sphinx(
         raise
 
 
+async def _litterbox_upload_and_scan(
+    litterbox_url: str,
+    filename: str,
+    file_bytes: bytes,
+    scan_type: str,
+    edr_profile: str,
+    poll_delay: int = 5,
+    max_poll_attempts: int = 6,
+) -> tuple[str, dict]:
+    """Upload to LitterBox, trigger scans, poll for results.
+
+    Returns (md5, risk_data) where risk_data may be empty if results
+    aren't ready yet.
+    """
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{litterbox_url}/upload",
+            files={"file": (filename, file_bytes, "application/octet-stream")},
+        )
+        if r.status_code != 200:
+            raise RuntimeError(f"LitterBox upload failed: HTTP {r.status_code} - {r.text[:300]}")
+        md5 = r.json()["file_info"]["md5"]
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        scan_endpoints = []
+        if scan_type in ("static", "both", "all"):
+            scan_endpoints.append(("static", f"{litterbox_url}/analyze/static/{md5}"))
+        if scan_type in ("dynamic", "both", "all"):
+            scan_endpoints.append(("dynamic", f"{litterbox_url}/analyze/dynamic/{md5}"))
+        if scan_type in ("edr", "all") and edr_profile:
+            scan_endpoints.append(("edr", f"{litterbox_url}/analyze/edr/{edr_profile}/{md5}"))
+
+        for label, url in scan_endpoints:
+            try:
+                await client.post(url)
+                logger.info("Triggered %s scan", label)
+            except httpx.HTTPError as exc:
+                logger.warning("Scan trigger %s failed: %r", label, exc)
+
+    risk_data = {}
+    for attempt in range(max_poll_attempts):
+        await asyncio.sleep(poll_delay)
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(f"{litterbox_url}/api/results/risk/{md5}")
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get("risk_level"):
+                        return md5, data
+        except httpx.HTTPError:
+            pass
+
+    return md5, risk_data
+
+
 async def _scan_direct_litterbox(
     headers: dict,
     payload_uuid: str,
@@ -628,46 +685,22 @@ async def _scan_direct_litterbox(
 
     payload_bytes = await _download_file(headers, agent_file_id)
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(
-            f"{litterbox_url}/upload",
-            files={"file": (filename, payload_bytes, "application/octet-stream")},
+    try:
+        md5, risk_data = await _litterbox_upload_and_scan(
+            litterbox_url, filename, payload_bytes,
+            scan_type, edr_profile, poll_delay=min(timeout, 5),
         )
-        if r.status_code != 200:
-            return _err(f"LitterBox upload failed: HTTP {r.status_code} - {r.text[:300]}")
-        md5 = r.json()["file_info"]["md5"]
+    except RuntimeError as exc:
+        return _err(str(exc))
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        scan_endpoints = []
-        if scan_type in ("static", "both", "all"):
-            scan_endpoints.append(("static", f"{litterbox_url}/analyze/static/{md5}"))
-        if scan_type in ("dynamic", "both", "all"):
-            scan_endpoints.append(("dynamic", f"{litterbox_url}/analyze/dynamic/{md5}"))
-        if scan_type in ("edr", "all") and edr_profile:
-            scan_endpoints.append(("edr", f"{litterbox_url}/analyze/edr/{edr_profile}/{md5}"))
-
-        for label, url in scan_endpoints:
-            try:
-                await client.post(url)
-            except httpx.HTTPError as exc:
-                logger.warning("Scan trigger %s failed: %r", label, exc)
-
-    await asyncio.sleep(min(timeout, 5))
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            r = await client.get(f"{litterbox_url}/api/results/risk/{md5}")
-            if r.status_code == 200:
-                risk = r.json()
-                level = risk.get("risk_level", "unknown")
-                score = risk.get("risk_score", "N/A")
-                return _ok(
-                    f"LitterBox scan complete: {level} risk "
-                    f"(score={score}) | hash={md5} | "
-                    f"results: {litterbox_url}/results/info/{md5}"
-                )
-        except httpx.HTTPError:
-            pass
+    if risk_data:
+        level = risk_data.get("risk_level", "unknown")
+        score = risk_data.get("risk_score", "N/A")
+        return _ok(
+            f"LitterBox scan complete: {level} risk "
+            f"(score={score}) | hash={md5} | "
+            f"results: {litterbox_url}/results/info/{md5}"
+        )
 
     return _ok(f"Scan triggered on LitterBox (md5={md5}). Results may still be processing.")
 
@@ -765,7 +798,7 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
 
         if not job and language:
             job = f"loader-{language}"
-            logger.warning("Job auto-resolved from language %r → %s", language, job)
+            logger.info("Job auto-resolved from language %r → %s", language, job)
 
         if not job:
             return _err("'job' (or 'language') input required")
@@ -786,12 +819,12 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
                 payload_bytes = await _download_file(auth_headers, agent_file_id)
                 build_params["SHELLCODE_SOURCE"] = f"mythic:{payload_uuid}"
                 build_params["PAYLOAD_SIZE"] = str(len(payload_bytes))
-                logger.warning(
+                logger.info(
                     "Payload %s resolved: %d bytes (%s)",
                     payload_uuid, len(payload_bytes), filename,
                 )
 
-        logger.warning(
+        logger.info(
             "build_and_scan: triggering %s job=%s params=%s",
             provider_name, job, list(build_params.keys()),
         )
@@ -802,9 +835,9 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
         if not result.build_id:
             return _err(f"Build dispatched but no build ID resolved. URL: {result.url}")
 
-        logger.warning("build_and_scan: polling build #%s", result.build_id)
+        logger.info("build_and_scan: polling build #%s", result.build_id)
         final = await _poll_build(provider, job, result.build_id, poll_timeout)
-        logger.warning(
+        logger.info(
             "build_and_scan: build %s #%s → %s (%.0fs)",
             provider_name, final.build_id, final.status.value,
             final.duration_seconds or 0,
@@ -832,16 +865,14 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
 
         artifacts = await provider.list_artifacts(job, final.build_id)
         if not artifacts:
-            logger.warning("build_and_scan: no artifacts found for build #%s", final.build_id)
+            logger.info("build_and_scan: no artifacts found for build #%s", final.build_id)
             return _ok(
                 f"Build SUCCESS: {provider_name} #{final.build_id} "
                 f"(duration={final.duration_seconds:.0f}s) | "
                 f"No artifacts found to scan"
             )
 
-        _BINARY_EXTS = (".exe", ".dll", ".bin", ".o", ".so", ".elf", ".cpl", ".sys")
-        _SKIP_SUFFIXES = (".sha256", ".sha1", ".md5", ".sig", ".asc", ".json", ".txt", ".log")
-        logger.warning(
+        logger.info(
             "build_and_scan: artifacts available: %s",
             [a.get("relativePath") or a.get("fileName") for a in artifacts],
         )
@@ -850,25 +881,19 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
             target = next((a for a in artifacts if a.get("relativePath") == artifact_name
                           or a.get("fileName") == artifact_name), None)
         else:
-            fname = lambda a: (a.get("fileName") or a.get("relativePath", "")).lower()
-            binary = [a for a in artifacts if fname(a).endswith(_BINARY_EXTS)]
-            if binary:
-                target = binary[0]
-            else:
-                non_meta = [a for a in artifacts if not fname(a).endswith(_SKIP_SUFFIXES)]
-                target = non_meta[0] if non_meta else artifacts[0]
+            target = select_artifact(artifacts)
 
         if not target:
             return _err(f"Artifact {artifact_name!r} not found in build #{final.build_id}")
 
         artifact_path = target.get("relativePath") or target.get("fileName", "artifact")
-        logger.warning("build_and_scan: downloading artifact %s", artifact_path)
+        logger.info("build_and_scan: downloading artifact %s", artifact_path)
         artifact_bytes = await provider.download_artifact(job, final.build_id, artifact_path)
-        logger.warning("build_and_scan: downloaded %d bytes", len(artifact_bytes))
+        logger.info("build_and_scan: downloaded %d bytes", len(artifact_bytes))
 
         upload_filename = artifact_path.split("/")[-1]
         uploaded_file_id = await _upload_file(auth_headers, upload_filename, artifact_bytes)
-        logger.warning(
+        logger.info(
             "build_and_scan: uploaded to Mythic as %s (file_id=%s)",
             upload_filename, uploaded_file_id,
         )
@@ -883,48 +908,20 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
             )
 
         litterbox_url = litterbox_url.rstrip("/")
-        logger.warning("build_and_scan: uploading artifact to LitterBox at %s", litterbox_url)
+        logger.info("build_and_scan: uploading artifact to LitterBox at %s", litterbox_url)
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(
-                f"{litterbox_url}/upload",
-                files={"file": (upload_filename, artifact_bytes, "application/octet-stream")},
+        try:
+            md5, risk_data = await _litterbox_upload_and_scan(
+                litterbox_url, upload_filename, artifact_bytes,
+                scan_type, edr_profile,
+                poll_delay=min(poll_timeout, 10),
             )
-            if r.status_code != 200:
-                return _ok(
-                    f"Build SUCCESS: {provider_name} #{final.build_id} | "
-                    f"Artifact uploaded to Mythic (file_id={uploaded_file_id}) | "
-                    f"LitterBox upload failed: HTTP {r.status_code}"
-                )
-            md5 = r.json()["file_info"]["md5"]
-
-        logger.warning("build_and_scan: triggering scans (md5=%s, type=%s)", md5, scan_type)
-        async with httpx.AsyncClient(timeout=120) as client:
-            scan_endpoints = []
-            if scan_type in ("static", "both", "all"):
-                scan_endpoints.append(("static", f"{litterbox_url}/analyze/static/{md5}"))
-            if scan_type in ("dynamic", "both", "all"):
-                scan_endpoints.append(("dynamic", f"{litterbox_url}/analyze/dynamic/{md5}"))
-            if scan_type in ("edr", "all") and edr_profile:
-                scan_endpoints.append(("edr", f"{litterbox_url}/analyze/edr/{edr_profile}/{md5}"))
-
-            for label, url in scan_endpoints:
-                try:
-                    await client.post(url)
-                    logger.warning("build_and_scan: triggered %s scan", label)
-                except httpx.HTTPError as exc:
-                    logger.warning("build_and_scan: %s scan trigger failed: %r", label, exc)
-
-        await asyncio.sleep(min(poll_timeout, 10))
-
-        risk_data = {}
-        async with httpx.AsyncClient(timeout=10) as client:
-            try:
-                r = await client.get(f"{litterbox_url}/api/results/risk/{md5}")
-                if r.status_code == 200:
-                    risk_data = r.json()
-            except httpx.HTTPError:
-                pass
+        except RuntimeError as exc:
+            return _ok(
+                f"Build SUCCESS: {provider_name} #{final.build_id} | "
+                f"Artifact uploaded to Mythic (file_id={uploaded_file_id}) | "
+                f"{exc}"
+            )
 
         level = (risk_data.get("risk_level") or "unknown").lower()
         score = risk_data.get("risk_score", "N/A")
@@ -972,7 +969,7 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
                     "url": f"{litterbox_url}/results/info/{md5}",
                     "data": scan_tag_data,
                 })
-                logger.warning(
+                logger.info(
                     "build_and_scan: tagged file %s (filemeta_id=%d) with %s",
                     uploaded_file_id, filemeta_int_id, tag_label,
                 )
@@ -986,7 +983,7 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
                         "url": f"{litterbox_url}/results/info/{md5}",
                         "data": scan_tag_data,
                     })
-                    logger.warning(
+                    logger.info(
                         "build_and_scan: tagged payload (id=%d) with %s",
                         payload_int_id, tag_label,
                     )
@@ -1034,7 +1031,7 @@ async def _poll_build(provider, job: str, build_id: str, timeout: int):
         elapsed += interval
 
         result = await provider.get_build_status(job, build_id)
-        logger.warning(
+        logger.info(
             "Poll %s #%s → %s (%.0fs elapsed)",
             provider.name, build_id, result.status.value, elapsed,
         )
@@ -1058,8 +1055,8 @@ async def _poll_build(provider, job: str, build_id: str, timeout: int):
 
 async def _gql(headers: dict, query: str, variables: dict) -> dict:
     op_name = query.strip().split("(")[0].split("{")[0].split()[-1] if query.strip() else "unknown"
-    logger.warning("GraphQL %s → %s", op_name, MYTHIC_GRAPHQL)
-    async with httpx.AsyncClient(verify=False, timeout=15) as client:
+    logger.info("GraphQL %s → %s", op_name, MYTHIC_GRAPHQL)
+    async with httpx.AsyncClient(verify=_VERIFY_SSL, timeout=15) as client:
         r = await client.post(
             MYTHIC_GRAPHQL,
             headers=headers,
@@ -1097,7 +1094,7 @@ def _decode_bytea(val: str) -> str:
 
 
 async def _download_file(headers: dict, agent_file_id: str) -> bytes:
-    async with httpx.AsyncClient(verify=False, timeout=60) as client:
+    async with httpx.AsyncClient(verify=_VERIFY_SSL, timeout=60) as client:
         r = await client.get(
             f"{MYTHIC_SERVER}/direct/download/{agent_file_id}",
             headers=headers,
@@ -1166,12 +1163,6 @@ _BUILD_PARAM_KEYS = {
     "target_arch", "operator_id", "campaign_tag",
     "litterbox_scan", "shellcode_source", "mythic_payload_uuid",
     "repo_url", "repo_token", "source_path",
-    "LANGUAGE", "FORMAT", "OUTPUT_FORMAT", "OBFUSCATION",
-    "SHELLCODE_PATH", "SCAN", "SCAN_TYPE", "REF",
-    "NIMCRYPT2_FLAGS", "SIGNING_PROFILE", "PE_SANITISE",
-    "TARGET_ARCH", "OPERATOR_ID", "CAMPAIGN_TAG",
-    "LITTERBOX_SCAN", "SHELLCODE_SOURCE", "MYTHIC_PAYLOAD_UUID",
-    "REPO_URL", "REPO_TOKEN", "SOURCE_PATH",
 }
 
 
@@ -1180,7 +1171,7 @@ def _extract_build_params(inputs: dict) -> dict[str, str]:
     for key, val in inputs.items():
         if key.startswith("param_"):
             params[key[6:].upper()] = str(val)
-        elif key in _BUILD_PARAM_KEYS:
+        elif key.lower() in _BUILD_PARAM_KEYS:
             params[key.upper()] = str(val)
     return params
 
@@ -1241,7 +1232,7 @@ def _provider_kwargs_from_inputs(inputs: dict, provider_name: str) -> dict:
             if secret_env:
                 val = os.getenv(secret_env, "")
                 if val:
-                    logger.warning("Token resolved from %s env var", secret_env)
+                    logger.info("Token resolved from %s env var", secret_env)
         if val:
             kwargs[param] = val
 
@@ -1273,13 +1264,13 @@ async def _register_workflows(api_token: str) -> None:
     headers = {"Authorization": f"Bearer {api_token}"}
     yamls = sorted(WORKFLOWS_DIR.glob("*.yaml"))
     if not yamls:
-        logger.warning("No workflow YAML files found in %s", WORKFLOWS_DIR)
+        logger.info("No workflow YAML files found in %s", WORKFLOWS_DIR)
         return
 
     max_retries = 12
     retry_delay = 5.0
 
-    async with httpx.AsyncClient(verify=False, timeout=15) as client:
+    async with httpx.AsyncClient(verify=_VERIFY_SSL, timeout=15) as client:
         for yml in yamls:
             contents = yml.read_text()
             variables = {
@@ -1301,7 +1292,7 @@ async def _register_workflows(api_token: str) -> None:
                         "eventingImportContainerWorkflow", {},
                     )
                     if data.get("status") == "success":
-                        logger.warning(
+                        logger.info(
                             "Registered workflow %s (id=%s)",
                             yml.name, data.get("eventgroup_id"),
                         )
@@ -1404,7 +1395,7 @@ class DaedalusEventing(Eventing):
     ) -> ContainerOnStartMessageResponse:
         global _STARTUP_API_TOKEN, _YAML_ENV_DEFAULTS
         _YAML_ENV_DEFAULTS = _load_yaml_env_defaults()
-        logger.warning("Loaded YAML env defaults: %s", list(_YAML_ENV_DEFAULTS.keys()))
+        logger.info("Loaded YAML env defaults: %s", list(_YAML_ENV_DEFAULTS.keys()))
         if message.APIToken:
             _STARTUP_API_TOKEN = message.APIToken
             await _register_workflows(message.APIToken)

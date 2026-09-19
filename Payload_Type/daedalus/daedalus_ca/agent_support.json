@@ -30,6 +30,21 @@
         "upload_command": "upload"
     },
     {
+        "agent": "merlin",
+        "bof_command": "coff",
+        "bof_file_parameter_name": "file",
+        "bof_argument_array_parameter_name": "arguments",
+        "bof_entrypoint_parameter_name": "function",
+        "inline_assembly_command": "",
+        "inline_assembly_file_parameter_name": "",
+        "inline_assembly_argument_parameter_name": "",
+        "execute_assembly_command": "execute-assembly",
+        "execute_assembly_file_parameter_name": "executable",
+        "execute_assembly_argument_parameter_name": "args",
+        "assembly_default_execution_method": "execute_assembly",
+        "upload_command": "upload"
+    },
+    {
         "agent": "starburst",
         "bof_command": "execute_coff",
         "bof_file_parameter_name": "bof_file",

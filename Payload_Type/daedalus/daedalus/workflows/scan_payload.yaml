@@ -7,7 +7,7 @@ environment:
     SCAN_TYPE: all
     EDR_PROFILE: ""
     SCAN_METHOD: sphinx
-    LITTERBOX_URL: http://10.5.99.12:1337
+    LITTERBOX_URL: ""
     TIMEOUT: "120"
 keywords:
     - daedalus

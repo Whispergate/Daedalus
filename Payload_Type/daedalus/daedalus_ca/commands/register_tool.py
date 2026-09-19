@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
-from pathlib import Path
 
 from mythic_container.MythicCommandBase import (
     CommandBase,
@@ -24,21 +22,9 @@ from mythic_container.MythicGoRPC import (
 
 from daedalus.providers import get_provider
 from daedalus_ca.secrets import resolve_provider_kwargs
+from daedalus_ca.shared import select_artifact, provider_credential_parameters
 
 logger = logging.getLogger("daedalus_ca.register_tool")
-
-_BINARY_EXTS = (".exe", ".dll", ".bin", ".o", ".so", ".elf", ".cpl", ".sys")
-_SKIP_SUFFIXES = (".sha256", ".sha1", ".md5", ".sig", ".asc", ".json", ".txt", ".log")
-
-
-def _select_artifact(artifacts: list[dict]) -> dict | None:
-    binaries = [a for a in artifacts if any(a.get("relativePath", "").lower().endswith(e) for e in _BINARY_EXTS)]
-    if binaries:
-        return binaries[0]
-    non_meta = [a for a in artifacts if not any(a.get("relativePath", "").lower().endswith(s) for s in _SKIP_SUFFIXES)]
-    if non_meta:
-        return non_meta[0]
-    return artifacts[0] if artifacts else None
 
 
 class RegisterToolArguments(TaskArguments):
@@ -99,109 +85,7 @@ class RegisterToolArguments(TaskArguments):
                     ParameterGroupInfo(required=False, ui_position=6),
                 ],
             ),
-            # --- Provider credential overrides (all optional, resolved from Mythic Secrets by default) ---
-            CommandParameter(
-                name="jenkins_url", type=ParameterType.String,
-                description="Jenkins server URL (override - normally from Secrets/env)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=20)],
-            ),
-            CommandParameter(
-                name="jenkins_user", type=ParameterType.String,
-                description="Jenkins username (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=21)],
-            ),
-            CommandParameter(
-                name="jenkins_token", type=ParameterType.String,
-                description="Jenkins API token (override - set JENKINS_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=22)],
-            ),
-            CommandParameter(
-                name="github_token", type=ParameterType.String,
-                description="GitHub token (override - set GITHUB_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=23)],
-            ),
-            CommandParameter(
-                name="github_owner", type=ParameterType.String,
-                description="GitHub repo owner (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=24)],
-            ),
-            CommandParameter(
-                name="github_repo", type=ParameterType.String,
-                description="GitHub repo name (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=25)],
-            ),
-            CommandParameter(
-                name="gitlab_url", type=ParameterType.String,
-                description="GitLab server URL (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=26)],
-            ),
-            CommandParameter(
-                name="gitlab_token", type=ParameterType.String,
-                description="GitLab token (override - set GITLAB_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=27)],
-            ),
-            CommandParameter(
-                name="gitlab_project_id", type=ParameterType.String,
-                description="GitLab project ID (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=28)],
-            ),
-            CommandParameter(
-                name="forgejo_url", type=ParameterType.String,
-                description="Forgejo server URL (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=29)],
-            ),
-            CommandParameter(
-                name="forgejo_token", type=ParameterType.String,
-                description="Forgejo token (override - set FORGEJO_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=30)],
-            ),
-            CommandParameter(
-                name="forgejo_owner", type=ParameterType.String,
-                description="Forgejo repo owner (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=31)],
-            ),
-            CommandParameter(
-                name="forgejo_repo", type=ParameterType.String,
-                description="Forgejo repo name (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=32)],
-            ),
-            CommandParameter(
-                name="gitea_url", type=ParameterType.String,
-                description="Gitea server URL (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=33)],
-            ),
-            CommandParameter(
-                name="gitea_token", type=ParameterType.String,
-                description="Gitea token (override - set GITEA_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=34)],
-            ),
-            CommandParameter(
-                name="gitea_owner", type=ParameterType.String,
-                description="Gitea repo owner (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=35)],
-            ),
-            CommandParameter(
-                name="gitea_repo", type=ParameterType.String,
-                description="Gitea repo name (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=36)],
-            ),
+            *provider_credential_parameters(),
         ]
 
     async def parse_arguments(self):
@@ -255,9 +139,9 @@ class RegisterTool(CommandBase):
             kwargs = resolve_provider_kwargs(taskData, provider_name)
             provider = get_provider(provider_name, **kwargs)
 
-            if not artifact_name and hasattr(provider, "list_artifacts"):
+            if not artifact_name:
                 artifacts = await provider.list_artifacts(job, build_id)
-                selected = _select_artifact(artifacts)
+                selected = select_artifact(artifacts)
                 if not selected:
                     raise ValueError(f"No artifacts found for {job} #{build_id}")
                 artifact_name = selected["relativePath"]

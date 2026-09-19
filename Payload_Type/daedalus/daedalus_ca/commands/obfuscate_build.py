@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
-from pathlib import Path
 
 from mythic_container.MythicCommandBase import (
     CommandBase,
@@ -26,37 +24,11 @@ from mythic_container.MythicGoRPC import (
 )
 
 from daedalus.providers import get_provider, BuildStatus
+from daedalus.eventing import _poll_build
 from daedalus_ca.secrets import resolve_provider_kwargs, resolve_secret, REPO_TOKEN
+from daedalus_ca.shared import load_agent_support, select_artifact, provider_credential_parameters
 
 logger = logging.getLogger("daedalus_ca.obfuscate_build")
-
-_SUPPORT_FILE = Path(__file__).parent.parent / "agent_support.json"
-_AGENT_SUPPORT: dict[str, dict] = {}
-
-_BINARY_EXTS = (".exe", ".dll", ".bin", ".o", ".so", ".elf", ".cpl", ".sys")
-_SKIP_SUFFIXES = (".sha256", ".sha1", ".md5", ".sig", ".asc", ".json", ".txt", ".log")
-
-_POLL_START = 5.0
-_POLL_MAX = 30.0
-_POLL_BACKOFF = 1.5
-
-
-def _load_support() -> dict[str, dict]:
-    global _AGENT_SUPPORT
-    if not _AGENT_SUPPORT:
-        entries = json.loads(_SUPPORT_FILE.read_text())
-        _AGENT_SUPPORT = {e["agent"]: e for e in entries}
-    return _AGENT_SUPPORT
-
-
-def _select_artifact(artifacts: list[dict]) -> dict | None:
-    binaries = [a for a in artifacts if any(a.get("relativePath", "").lower().endswith(e) for e in _BINARY_EXTS)]
-    if binaries:
-        return binaries[0]
-    non_meta = [a for a in artifacts if not any(a.get("relativePath", "").lower().endswith(s) for s in _SKIP_SUFFIXES)]
-    if non_meta:
-        return non_meta[0]
-    return artifacts[0] if artifacts else None
 
 
 class ObfuscateBuildArguments(TaskArguments):
@@ -186,109 +158,7 @@ class ObfuscateBuildArguments(TaskArguments):
                     ParameterGroupInfo(required=False, ui_position=13),
                 ],
             ),
-            # --- Provider credential overrides (all optional, resolved from Mythic Secrets by default) ---
-            CommandParameter(
-                name="jenkins_url", type=ParameterType.String,
-                description="Jenkins server URL (override - normally from Secrets/env)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=20)],
-            ),
-            CommandParameter(
-                name="jenkins_user", type=ParameterType.String,
-                description="Jenkins username (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=21)],
-            ),
-            CommandParameter(
-                name="jenkins_token", type=ParameterType.String,
-                description="Jenkins API token (override - set JENKINS_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=22)],
-            ),
-            CommandParameter(
-                name="github_token", type=ParameterType.String,
-                description="GitHub token (override - set GITHUB_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=23)],
-            ),
-            CommandParameter(
-                name="github_owner", type=ParameterType.String,
-                description="GitHub repo owner (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=24)],
-            ),
-            CommandParameter(
-                name="github_repo", type=ParameterType.String,
-                description="GitHub repo name (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=25)],
-            ),
-            CommandParameter(
-                name="gitlab_url", type=ParameterType.String,
-                description="GitLab server URL (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=26)],
-            ),
-            CommandParameter(
-                name="gitlab_token", type=ParameterType.String,
-                description="GitLab token (override - set GITLAB_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=27)],
-            ),
-            CommandParameter(
-                name="gitlab_project_id", type=ParameterType.String,
-                description="GitLab project ID (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=28)],
-            ),
-            CommandParameter(
-                name="forgejo_url", type=ParameterType.String,
-                description="Forgejo server URL (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=29)],
-            ),
-            CommandParameter(
-                name="forgejo_token", type=ParameterType.String,
-                description="Forgejo token (override - set FORGEJO_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=30)],
-            ),
-            CommandParameter(
-                name="forgejo_owner", type=ParameterType.String,
-                description="Forgejo repo owner (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=31)],
-            ),
-            CommandParameter(
-                name="forgejo_repo", type=ParameterType.String,
-                description="Forgejo repo name (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=32)],
-            ),
-            CommandParameter(
-                name="gitea_url", type=ParameterType.String,
-                description="Gitea server URL (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=33)],
-            ),
-            CommandParameter(
-                name="gitea_token", type=ParameterType.String,
-                description="Gitea token (override - set GITEA_API_KEY in Mythic Secrets instead)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=34)],
-            ),
-            CommandParameter(
-                name="gitea_owner", type=ParameterType.String,
-                description="Gitea repo owner (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=35)],
-            ),
-            CommandParameter(
-                name="gitea_repo", type=ParameterType.String,
-                description="Gitea repo name (override)",
-                default_value="",
-                parameter_group_info=[ParameterGroupInfo(required=False, ui_position=36)],
-            ),
+            *provider_credential_parameters(),
         ]
 
     async def parse_arguments(self):
@@ -398,21 +268,10 @@ class ObfuscateBuild(CommandBase):
             logger.warning("Build triggered: %s/%s #%s", provider_name, job, build_id)
 
             # --- Phase 2: Poll build until completion ---
-            delay = _POLL_START
-            elapsed = 0.0
+            build_result = await _poll_build(provider, job, build_id, timeout)
 
-            while elapsed < timeout:
-                await asyncio.sleep(delay)
-                elapsed += delay
-
-                status = await provider.get_build_status(job, build_id)
-                if status.status.is_terminal:
-                    build_result = status
-                    break
-                delay = min(delay * _POLL_BACKOFF, _POLL_MAX)
-            else:
+            if build_result.status == BuildStatus.UNKNOWN:
                 raise RuntimeError(f"Build timed out after {timeout}s")
-
             if build_result.status != BuildStatus.SUCCESS:
                 raise RuntimeError(f"Build failed with status: {build_result.status.value}")
 
@@ -420,9 +279,9 @@ class ObfuscateBuild(CommandBase):
 
             # --- Phase 3: Download artifact ---
             artifact_name = ""
-            if hasattr(provider, "list_artifacts"):
-                artifacts = await provider.list_artifacts(job, build_id)
-                selected = _select_artifact(artifacts)
+            artifacts = await provider.list_artifacts(job, build_id)
+            if artifacts:
+                selected = select_artifact(artifacts)
                 if selected:
                     artifact_name = selected["relativePath"]
 
@@ -462,7 +321,7 @@ class ObfuscateBuild(CommandBase):
                 return response
 
             # --- Phase 5: Delegate to target agent ---
-            support = _load_support()
+            support = load_agent_support()
             callback_resp = await SendMythicRPCCallbackSearch(MythicRPCCallbackSearchMessage(
                 CallbackID=taskData.Task.CallbackID,
             ))

@@ -5,8 +5,8 @@ trigger_data: {}
 environment:
     PROVIDER: jenkins
     JOB: ""
-    JENKINS_URL: http://10.5.99.3:8080
-    JENKINS_USER: admin
+    JENKINS_URL: ""
+    JENKINS_USER: ""
     LANGUAGE: c-mingw
     OUTPUT_FORMAT: exe
     OBFUSCATION: none
@@ -18,7 +18,7 @@ environment:
     TIMEOUT: "300"
     LITTERBOX_SCAN: "true"
     SCAN_TYPE: all
-    LITTERBOX_URL: http://10.5.99.12:1337
+    LITTERBOX_URL: ""
     OPERATOR_ID: ""
     CAMPAIGN_TAG: ""
 keywords:

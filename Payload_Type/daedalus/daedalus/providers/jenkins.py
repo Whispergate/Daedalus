@@ -35,7 +35,7 @@ class JenkinsProvider(CIProvider):
         self.verify_ssl = verify_ssl
         self._crumb_header: str = ""
         self._crumb_value: str = ""
-        logger.warning(
+        logger.info(
             "JenkinsProvider init: base_url=%r auth=%s",
             self.base_url, "set" if self.auth else "none",
         )
@@ -63,9 +63,9 @@ class JenkinsProvider(CIProvider):
                     data = r.json()
                     self._crumb_header = data.get("crumbRequestField", "Jenkins-Crumb")
                     self._crumb_value = data.get("crumb", "")
-                    logger.warning("Fetched Jenkins crumb: %s", self._crumb_header)
+                    logger.info("Fetched Jenkins crumb: %s", self._crumb_header)
                 elif r.status_code == 404:
-                    logger.warning("Jenkins CSRF protection disabled (no crumb issuer)")
+                    logger.info("Jenkins CSRF protection disabled (no crumb issuer)")
                 else:
                     logger.warning("Crumb fetch failed: HTTP %d", r.status_code)
         except httpx.HTTPError as exc:
@@ -84,25 +84,25 @@ class JenkinsProvider(CIProvider):
         async with self._client() as client:
             if parameters:
                 endpoint = f"{self.base_url}/{job_path}/buildWithParameters"
-                logger.warning("POST %s (params: %s)", endpoint, list(parameters.keys()))
+                logger.info("POST %s (params: %s)", endpoint, list(parameters.keys()))
                 r = await client.post(endpoint, data=parameters)
             else:
                 endpoint = f"{self.base_url}/{job_path}/build"
-                logger.warning("POST %s (no params)", endpoint)
+                logger.info("POST %s (no params)", endpoint)
                 r = await client.post(endpoint)
 
-            logger.warning(
+            logger.info(
                 "Jenkins trigger response: HTTP %d, Location=%s",
                 r.status_code, r.headers.get("Location", "(none)"),
             )
 
             if r.status_code == 400 and "not parameterized" in r.text:
-                logger.warning(
+                logger.info(
                     "Job not parameterized yet (first run?), retrying with /build"
                 )
                 endpoint = f"{self.base_url}/{job_path}/build"
                 r = await client.post(endpoint)
-                logger.warning(
+                logger.info(
                     "Jenkins /build fallback: HTTP %d, Location=%s",
                     r.status_code, r.headers.get("Location", "(none)"),
                 )
@@ -114,9 +114,9 @@ class JenkinsProvider(CIProvider):
                 )
 
             queue_url = r.headers.get("Location", "")
-            logger.warning("Resolving queue item: %s", queue_url)
+            logger.info("Resolving queue item: %s", queue_url)
             build_id = await self._resolve_queue_item(client, queue_url)
-            logger.warning("Resolved build_id: %s", build_id or "(empty)")
+            logger.info("Resolved build_id: %s", build_id or "(empty)")
 
         return BuildResult(
             provider=self.name,
@@ -127,7 +127,7 @@ class JenkinsProvider(CIProvider):
 
     async def _resolve_queue_item(self, client: httpx.AsyncClient, queue_url: str) -> str:
         if not queue_url:
-            logger.warning("No queue URL returned, cannot resolve build ID")
+            logger.info("No queue URL returned, cannot resolve build ID")
             return ""
         api_url = queue_url.rstrip("/") + "/api/json"
         for attempt in range(12):
@@ -138,16 +138,16 @@ class JenkinsProvider(CIProvider):
                     data = r.json()
                     exe = data.get("executable")
                     if exe and exe.get("number"):
-                        logger.warning("Queue resolved to build #%s", exe["number"])
+                        logger.info("Queue resolved to build #%s", exe["number"])
                         return str(exe["number"])
                     if data.get("cancelled"):
-                        logger.warning("Build was cancelled in queue")
+                        logger.info("Build was cancelled in queue")
                         return ""
-                    logger.warning("Queue poll %d/12: waiting (why=%s)", attempt + 1, data.get("why", ""))
+                    logger.info("Queue poll %d/12: waiting (why=%s)", attempt + 1, data.get("why", ""))
                 else:
-                    logger.warning("Queue poll %d/12: HTTP %d", attempt + 1, r.status_code)
+                    logger.info("Queue poll %d/12: HTTP %d", attempt + 1, r.status_code)
             except httpx.HTTPError as exc:
-                logger.warning("Queue poll %d/12: %r", attempt + 1, exc)
+                logger.info("Queue poll %d/12: %r", attempt + 1, exc)
         logger.warning("Queue item never resolved after 12 attempts")
         return ""
 
