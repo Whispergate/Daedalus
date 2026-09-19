@@ -32,7 +32,7 @@ class DaedalusCA(PayloadType):
     semver = "1.1"
     agent_path = _AGENT_DIR
     agent_icon_path = str(_AGENT_DIR.parent / "assets" / "daedalus.png")
-    command_augment_supported_agents = ["apollo", "athena", "merlin", "starburst"]
+    command_augment_supported_agents = ["apollo", "athena", "xenon", "starburst", "poopsie"]
     supports_dynamic_loading = False
     note = (
         "Daedalus CA adds the following commands to supported agent callbacks:\n\n"
