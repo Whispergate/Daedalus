@@ -62,7 +62,7 @@ Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger the
 
 #### packer_flags
 
-- Description: Extra Calypso flags (e.g. `--unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp`)
+- Description: Calypso packer flags (e.g. `--inject remote --execute apc --process explorer.exe --syscall indirect --cipher aes-cbc --amsi hwbp --etw hwbp --sleep 10 --unhook ntdll.dll`)
 - Required Value: False
 - Default Value: None
 
@@ -114,7 +114,7 @@ Each provider has optional credential overrides. These override Mythic Secrets a
 daedalus_obfuscate_build -repo_url https://github.com/nicocha30/ligolo-ng -language go -obfuscation garble -source_path cmd/agent
 daedalus_obfuscate_build -repo_url https://github.com/example/tool -provider github -language csharp -obfuscation full -tool_type assembly
 daedalus_obfuscate_build -repo_url https://github.com/BeichenDream/GodPotato -language csharp -obfuscation calypso -signing_profile microsoft
-daedalus_obfuscate_build -repo_url https://github.com/example/loader -language csharp -obfuscation full -signing_profile google -packer_flags "--unhook ntdll.dll --sleep 10"
+daedalus_obfuscate_build -repo_url https://github.com/example/loader -language csharp -obfuscation calypso -signing_profile google -packer_flags "--inject local --execute thread --syscall indirect --cipher aes-cbc --unhook ntdll.dll --sleep 10"
 ```
 
 ## MITRE ATT&CK Mapping

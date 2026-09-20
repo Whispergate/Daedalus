@@ -40,7 +40,7 @@ on:
         required: false
         default: "none"
       PACKER_FLAGS:
-        description: "Extra Calypso flags (e.g. --unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp)"
+        description: "Calypso flags: --inject local|remote --execute thread|direct|apc|callback|fiber --syscall indirect|hellsgate|halosgate --cipher aes-cbc|aes-ecb|xor|rc4 --compress none|zlib|lz4|rle --encode none|base64|hex|mac|uuid --amsi --etw --sleep --unhook --sandbox --ppid --block-dlls --module-stomp --drip --entropy-reduce --self-delete --obfuscate --no-antidebug"
         required: false
         default: ""
 
@@ -133,10 +133,12 @@ jobs:
           if [ "${{ inputs.OBFUSCATION }}" = "calypso" ]; then
             PACK_MODE="--peinject"
             [ "${{ inputs.LANGUAGE }}" = "csharp" ] && PACK_MODE="--type csharp"
+            CALYPSO_FLAGS="${{ inputs.PACKER_FLAGS }}"
+            CALYPSO_FLAGS="${CALYPSO_FLAGS:-"--unhook ntdll.dll --inject local --execute thread --syscall indirect --cipher aes-cbc --hide"}"
             for f in build/*.exe; do
               [ -f "$f" ] || continue
               echo "[*] Packing $f with Calypso ($PACK_MODE)"
-              calypso --file "$f" $PACK_MODE --output "${f%.exe}-packed.exe" --hide --unhook ntdll.dll ${{ inputs.PACKER_FLAGS }}
+              calypso --file "$f" $PACK_MODE --output "${f%.exe}-packed.exe" $CALYPSO_FLAGS
               mv "${f%.exe}-packed.exe" "$f"
             done
           else

@@ -18,7 +18,7 @@ pipeline {
         string(name: 'LANGUAGE',      defaultValue: 'csharp', description: 'Build language: csharp, go, rust, c-mingw, cpp-mingw, nim')
         string(name: 'OUTPUT_FORMAT', defaultValue: 'exe',   description: 'Output format: exe, dll, bin, shellcode, svc')
         string(name: 'OBFUSCATION',   defaultValue: 'none',  description: 'Obfuscation level: none, basic, full, garble, calypso')
-        string(name: 'PACKER_FLAGS', defaultValue: '',    description: 'Extra Calypso flags (e.g. --unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp)')
+        string(name: 'PACKER_FLAGS', defaultValue: '',    description: 'Calypso flags: --inject local|remote --execute thread|direct|apc|callback|fiber --syscall indirect|hellsgate|halosgate --cipher aes-cbc|aes-ecb|xor|rc4 --compress none|zlib|lz4|rle --encode none|base64|hex|mac|uuid --amsi --etw --sleep --unhook --sandbox --ppid --block-dlls --module-stomp --drip --entropy-reduce --self-delete --obfuscate --no-antidebug')
     }
 
     stages {
@@ -215,12 +215,12 @@ CRPROJ
 
                     } else if (params.OBFUSCATION == 'calypso') {
                         def packMode = (params.LANGUAGE == 'csharp') ? '--type csharp' : '--peinject'
-                        def extraFlags = params.PACKER_FLAGS ?: ''
+                        def calypsoFlags = params.PACKER_FLAGS ?: '--unhook ntdll.dll --inject local --execute thread --syscall indirect --cipher aes-cbc --hide'
                         sh """
                             for f in build/*.exe; do
                                 [ -f "\$f" ] || continue
                                 echo "[*] Packing \$f with Calypso (${packMode})"
-                                calypso --file "\$f" ${packMode} --output "\${f%.exe}-packed.exe" --hide --unhook ntdll.dll ${extraFlags}
+                                calypso --file "\$f" ${packMode} --output "\${f%.exe}-packed.exe" ${calypsoFlags}
                                 mv "\${f%.exe}-packed.exe" "\$f"
                             done
                         """

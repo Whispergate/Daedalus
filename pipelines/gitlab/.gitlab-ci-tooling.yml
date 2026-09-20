@@ -123,10 +123,11 @@ obfuscate_tool:
       if [ "$OBFUSCATION" = "calypso" ]; then
         PACK_MODE="--peinject"
         [ "$LANGUAGE" = "csharp" ] && PACK_MODE="--type csharp"
+        CALYPSO_FLAGS="${PACKER_FLAGS:-"--unhook ntdll.dll --inject local --execute thread --syscall indirect --cipher aes-cbc --hide"}"
         for f in build/*.exe; do
           [ -f "$f" ] || continue
           echo "[*] Packing $f with Calypso ($PACK_MODE)"
-          calypso --file "$f" $PACK_MODE --output "${f%.exe}-packed.exe" --hide --unhook ntdll.dll $PACKER_FLAGS
+          calypso --file "$f" $PACK_MODE --output "${f%.exe}-packed.exe" $CALYPSO_FLAGS
           mv "${f%.exe}-packed.exe" "$f"
         done
       else

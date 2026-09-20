@@ -133,7 +133,7 @@ class ObfuscateBuildArguments(TaskArguments):
             CommandParameter(
                 name="packer_flags",
                 type=ParameterType.String,
-                description="Extra Calypso flags (e.g. --unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp)",
+                description="Calypso packer flags (e.g. --inject remote --execute apc --process explorer.exe --syscall indirect --cipher aes-cbc --amsi hwbp --etw hwbp --sleep 10 --unhook ntdll.dll)",
                 default_value="",
                 parameter_group_info=[
                     ParameterGroupInfo(required=False, ui_position=11),

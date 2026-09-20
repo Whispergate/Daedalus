@@ -61,7 +61,7 @@ Separate pipeline configs for the `daedalus_obfuscate_build` command. These clon
 | `LANGUAGE` | `csharp` | Build language: `csharp`, `go`, `rust`, `c-mingw`, `cpp-mingw`, `nim` |
 | `OUTPUT_FORMAT` | `exe` | Output format: `exe`, `dll`, `bin`, `shellcode`, `svc` |
 | `OBFUSCATION` | `none` | Obfuscation level: `none`, `basic`, `full`, `garble`, `calypso` |
-| `PACKER_FLAGS` | (empty) | Extra Calypso flags (e.g. `--unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp`) |
+| `PACKER_FLAGS` | (empty) | Calypso flags: `--inject local\|remote --execute thread\|direct\|apc\|callback\|fiber --syscall indirect\|hellsgate\|halosgate --cipher aes-cbc\|aes-ecb\|xor\|rc4 --compress none\|zlib\|lz4\|rle --encode none\|base64\|hex\|mac\|uuid --amsi --etw --sleep --unhook --sandbox --ppid --block-dlls --module-stomp --drip --entropy-reduce --self-delete --obfuscate --no-antidebug` |
 
 ### Stages
 
@@ -84,4 +84,4 @@ Separate pipeline configs for the `daedalus_obfuscate_build` command. These clon
 
 C# obfuscation requires ConfuserEx on the runner. Install `Confuser.CLI.exe` on PATH or place the .NET build at `/opt/confuserex/Confuser.CLI.dll`. Go obfuscation requires [garble](https://github.com/burrowers/garble) on PATH.
 
-[Calypso] is a PE packer that works on any language's compiled output. It AES-encrypts the binary and wraps it in a new executable with syscall-based injection and sandbox evasion. For C# binaries it uses `--type csharp` (loads .NET assemblies); all other languages use `--peinject`. The `maas-builder-calypso` Docker image ships with the compiled `calypso` binary and OLLVM cross-compilation wrappers. Pass additional flags via `PACKER_FLAGS` (e.g. `--unhook ntdll.dll --sleep 10`).
+[Calypso] is a PE packer that works on any language's compiled output. It encrypts the binary and wraps it in a new executable with configurable injection methods (`--inject local|remote`), execution primitives (`--execute thread|direct|apc|callback|fiber`), syscall strategies (`--syscall indirect|hellsgate|halosgate`), ciphers (`--cipher aes-cbc|aes-ecb|xor|rc4`), compression (`--compress none|zlib|lz4|rle`), and encoding (`--encode none|base64|hex|mac|uuid`). Additional evasion flags include `--amsi`, `--etw`, `--sleep`, `--unhook`, `--sandbox`, `--ppid`, `--block-dlls`, `--module-stomp`, `--drip`, `--entropy-reduce`, `--self-delete`, `--obfuscate`, and `--no-antidebug`. For C# binaries it uses `--type csharp` (loads .NET assemblies); all other languages use `--peinject`. The `maas-builder-calypso` Docker image ships with the compiled `calypso` binary and OLLVM cross-compilation wrappers. When `PACKER_FLAGS` is empty, sensible defaults are applied (`--unhook ntdll.dll --inject local --execute thread --syscall indirect --cipher aes-cbc --hide`).
