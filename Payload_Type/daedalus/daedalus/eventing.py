@@ -1169,10 +1169,13 @@ _BUILD_PARAM_KEYS = {
 def _extract_build_params(inputs: dict) -> dict[str, str]:
     params = {}
     for key, val in inputs.items():
+        str_val = str(val)
+        if not str_val:
+            continue
         if key.startswith("param_"):
-            params[key[6:].upper()] = str(val)
+            params[key[6:].upper()] = str_val
         elif key.lower() in _BUILD_PARAM_KEYS:
-            params[key.upper()] = str(val)
+            params[key.upper()] = str_val
     return params
 
 
