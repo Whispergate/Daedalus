@@ -66,7 +66,11 @@ Daedalus Container
 
 ### Pipeline Parameter Forwarding
 
-Build workflows forward all parameters accepted by Labyrinth's Jenkinsfile, including `LANGUAGE`, `OUTPUT_FORMAT`, `OBFUSCATION`, `PACKER_FLAGS`, `SIGNING_PROFILE`, `PE_SANITISE`, `TARGET_ARCH`, `LITTERBOX_SCAN`, `OPERATOR_ID`, and `CAMPAIGN_TAG`. Parameters flow from the workflow environment block through `_resolve_inputs` into `_extract_build_params`, which uppercases them before passing to the CI provider's `trigger_build` method.
+Build workflows forward all parameters accepted by Labyrinth's Jenkinsfile, including `LANGUAGE`, `OUTPUT_FORMAT`, `OBFUSCATION`, `CALYPSO_MODE`, `PACKER_PRESET`, `PACKER_FLAGS`, `SIGNING_PROFILE`, `PE_SANITISE`, `TARGET_ARCH`, `LITTERBOX_SCAN`, `OPERATOR_ID`, and `CAMPAIGN_TAG`. Parameters flow from the workflow environment block through `_resolve_inputs` into `_extract_build_params`, which uppercases them before passing to the CI provider's `trigger_build` method. `PACKER_PRESET` is resolved to flags by the Jenkinsfile at build time (not by Daedalus); `PACKER_FLAGS` overrides the preset if both are set.
+
+### Loader Name Resolution
+
+When a `language` input is provided without a `job`, Daedalus auto-resolves the job name. The `language` value can be either the full loader directory name (`loader-c-mingw`) or the short form (`c-mingw`). If the value does not already start with `loader-`, the prefix is added automatically. The normalized name is passed both as the Jenkins job name and as the `LANGUAGE` build parameter, which the Jenkinsfile uses to locate the loader directory.
 
 The CA container's `daedalus_obfuscate_build` command targets Labyrinth's `Jenkinsfile.tooling` pipeline instead, which accepts `REPO_URL`, `REPO_TOKEN`, `REF`, `SOURCE_PATH`, `LANGUAGE`, `OUTPUT_FORMAT`, `OBFUSCATION`, `PACKER_FLAGS`, and `SIGNING_PROFILE`.
 

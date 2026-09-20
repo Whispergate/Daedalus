@@ -90,6 +90,8 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         "build_id": "BUILD_ID",
         "artifact_name": "ARTIFACT_NAME",
         "include_log": "INCLUDE_LOG",
+        "calypso_mode": "CALYPSO_MODE",
+        "packer_preset": "PACKER_PRESET",
         "packer_flags": "PACKER_FLAGS",
         "signing_profile": "SIGNING_PROFILE",
         "pe_sanitise": "PE_SANITISE",
@@ -286,8 +288,11 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
             poll_timeout = 300
 
         if not job and language:
-            job = f"loader-{language}"
-            logger.info("Job auto-resolved from language %r → %s", language, job)
+            if not language.startswith("loader-"):
+                language = f"loader-{language}"
+            job = language
+            inputs["language"] = language
+            logger.info("Job auto-resolved from language → %s", job)
 
         if not job:
             return _err("'job' input required (CI job/pipeline name)")
@@ -377,8 +382,11 @@ async def check_status(msg: NewCustomEventingMessage) -> NewCustomEventingMessag
         build_id = inputs.get("build_id", "").strip()
 
         if not job and language:
-            job = f"loader-{language}"
-            logger.info("Job auto-resolved from language %r → %s", language, job)
+            if not language.startswith("loader-"):
+                language = f"loader-{language}"
+            job = language
+            inputs["language"] = language
+            logger.info("Job auto-resolved from language → %s", job)
 
         if not job or not build_id:
             return _err("'job' (or 'language') and 'build_id' inputs required")
@@ -454,8 +462,11 @@ async def download_artifact(msg: NewCustomEventingMessage) -> NewCustomEventingM
         payload_uuid = inputs.get("payload_uuid", "").strip()
 
         if not job and language:
-            job = f"loader-{language}"
-            logger.info("Job auto-resolved from language %r → %s", language, job)
+            if not language.startswith("loader-"):
+                language = f"loader-{language}"
+            job = language
+            inputs["language"] = language
+            logger.info("Job auto-resolved from language → %s", job)
 
         if not job or not build_id:
             return _err("'job' (or 'language') and 'build_id' inputs required")
@@ -797,8 +808,11 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
             poll_timeout = 300
 
         if not job and language:
-            job = f"loader-{language}"
-            logger.info("Job auto-resolved from language %r → %s", language, job)
+            if not language.startswith("loader-"):
+                language = f"loader-{language}"
+            job = language
+            inputs["language"] = language
+            logger.info("Job auto-resolved from language → %s", job)
 
         if not job:
             return _err("'job' (or 'language') input required")
@@ -1159,7 +1173,7 @@ async def _tag_payload_with_build(
 _BUILD_PARAM_KEYS = {
     "language", "format", "output_format", "obfuscation",
     "shellcode_path", "scan", "scan_type", "ref", "workflow",
-    "packer_flags", "signing_profile", "pe_sanitise",
+    "calypso_mode", "packer_preset", "packer_flags", "signing_profile", "pe_sanitise",
     "target_arch", "operator_id", "campaign_tag",
     "litterbox_scan", "shellcode_source", "mythic_payload_uuid",
     "repo_url", "repo_token", "source_path",
