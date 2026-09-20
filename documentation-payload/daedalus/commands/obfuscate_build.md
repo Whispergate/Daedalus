@@ -6,7 +6,7 @@ hidden = false
 +++
 
 ## Summary
-Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger the CI/CD tooling pipeline (garble, ConfuserEx, Nimcrypt2, Limelighter signing) on any supported provider, then execute in-memory or register as a tool. Uses the `tooling-{language}` pipeline by default, separate from the loader pipelines.
+Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger the CI/CD tooling pipeline (garble, ConfuserEx, Calypso, Limelighter signing) on any supported provider, then execute in-memory or register as a tool. Uses the `tooling-{language}` pipeline by default, separate from the loader pipelines.
 
 - Needs Admin: False
 - Version: 4
@@ -58,11 +58,11 @@ Pull source from any Git repository (GitHub, Forgejo, GitLab, etc.), trigger the
 - Description: Obfuscation level to apply (garble for Go, ConfuserEx for .NET, etc.)
 - Required Value: False
 - Default Value: full
-- Choices: none, basic, full, garble, nimcrypt2
+- Choices: none, basic, full, garble, calypso
 
-#### nimcrypt2_flags
+#### packer_flags
 
-- Description: Extra Nimcrypt2 flags (e.g. `-l` for OLLVM stub, `-s` to skip sandbox checks)
+- Description: Extra Calypso flags (e.g. `--unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp`)
 - Required Value: False
 - Default Value: None
 
@@ -113,8 +113,8 @@ Each provider has optional credential overrides. These override Mythic Secrets a
 ```
 daedalus_obfuscate_build -repo_url https://github.com/nicocha30/ligolo-ng -language go -obfuscation garble -source_path cmd/agent
 daedalus_obfuscate_build -repo_url https://github.com/example/tool -provider github -language csharp -obfuscation full -tool_type assembly
-daedalus_obfuscate_build -repo_url https://github.com/BeichenDream/GodPotato -language csharp -obfuscation nimcrypt2 -signing_profile microsoft
-daedalus_obfuscate_build -repo_url https://github.com/example/loader -language csharp -obfuscation full -signing_profile google -nimcrypt2_flags "-l -s"
+daedalus_obfuscate_build -repo_url https://github.com/BeichenDream/GodPotato -language csharp -obfuscation calypso -signing_profile microsoft
+daedalus_obfuscate_build -repo_url https://github.com/example/loader -language csharp -obfuscation full -signing_profile google -packer_flags "--unhook ntdll.dll --sleep 10"
 ```
 
 ## MITRE ATT&CK Mapping
@@ -140,7 +140,7 @@ The command passes these as CI build parameters:
 | `REPO_TOKEN` | `repo_token` argument (resolved via Mythic Secrets) |
 | `SOURCE_PATH` | `source_path` argument |
 | `REF` | `ref` argument |
-| `NIMCRYPT2_FLAGS` | `nimcrypt2_flags` argument (only when set) |
+| `PACKER_FLAGS` | `packer_flags` argument (only when set) |
 | `SIGNING_PROFILE` | `signing_profile` argument (only when not `none`) |
 
 ### Pipeline Phases

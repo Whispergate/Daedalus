@@ -60,14 +60,14 @@ Separate pipeline configs for the `daedalus_obfuscate_build` command. These clon
 | `SOURCE_PATH` | (empty) | Subdirectory to compile (empty = repo root) |
 | `LANGUAGE` | `csharp` | Build language: `csharp`, `go`, `rust`, `c-mingw`, `cpp-mingw`, `nim` |
 | `OUTPUT_FORMAT` | `exe` | Output format: `exe`, `dll`, `bin`, `shellcode`, `svc` |
-| `OBFUSCATION` | `none` | Obfuscation level: `none`, `basic`, `full`, `garble`, `nimcrypt2` |
-| `NIMCRYPT2_FLAGS` | (empty) | Extra flags for Nimcrypt2 (e.g. `-l` for OLLVM, `-s` to skip sandbox checks) |
+| `OBFUSCATION` | `none` | Obfuscation level: `none`, `basic`, `full`, `garble`, `calypso` |
+| `PACKER_FLAGS` | (empty) | Extra Calypso flags (e.g. `--unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp`) |
 
 ### Stages
 
 1. **Clone** - shallow clone at the specified ref, with optional token auth.
 2. **Build** - language-specific compilation. Auto-detects `.sln`/`.csproj` for C#, uses `Makefile` when present for C/C++.
-3. **Obfuscate** (skipped when `none`) - ConfuserEx for C# (`basic`/`full`), Garble for Go (`garble`), Nimcrypt2 for any language (`nimcrypt2`).
+3. **Obfuscate** (skipped when `none`) - ConfuserEx for C# (`basic`/`full`), Garble for Go (`garble`), Calypso for any language (`calypso`).
 4. **Archive** - uploads build output as a CI artifact.
 
 ### Provider Files
@@ -84,4 +84,4 @@ Separate pipeline configs for the `daedalus_obfuscate_build` command. These clon
 
 C# obfuscation requires ConfuserEx on the runner. Install `Confuser.CLI.exe` on PATH or place the .NET build at `/opt/confuserex/Confuser.CLI.dll`. Go obfuscation requires [garble](https://github.com/burrowers/garble) on PATH.
 
-[Nimcrypt2](https://github.com/icyguider/Nimcrypt2) is a PE packer that works on any language's compiled output. It AES-encrypts the binary and wraps it in a new executable with syscall-based injection and sandbox evasion. For C# binaries it uses `-t csharp` (loads .NET assemblies); all other languages use `-t pe`. The `maas-builder-nim` Docker image ships with Nim, all nimble dependencies, the compiled `nimcrypt` binary, and OLLVM cross-compilation wrappers. Pass `-l` via `NIMCRYPT2_FLAGS` to compile the packer stub with OLLVM passes.
+[Calypso] is a PE packer that works on any language's compiled output. It AES-encrypts the binary and wraps it in a new executable with syscall-based injection and sandbox evasion. For C# binaries it uses `--type csharp` (loads .NET assemblies); all other languages use `--peinject`. The `maas-builder-calypso` Docker image ships with the compiled `calypso` binary and OLLVM cross-compilation wrappers. Pass additional flags via `PACKER_FLAGS` (e.g. `--unhook ntdll.dll --sleep 10`).

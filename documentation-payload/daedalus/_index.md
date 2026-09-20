@@ -139,8 +139,8 @@ The build workflows (`Manual Build`, `Auto Build`, `Build and Scan`) forward all
 |-----------|---------|-------------|
 | `LANGUAGE` | `c-mingw` | Build language: `c-mingw`, `c-ollvm`, `go-garble`, `rust`, `csharp` |
 | `OUTPUT_FORMAT` | `exe` | Output format: `exe`, `dll`, `shellcode` |
-| `OBFUSCATION` | `none` | Obfuscation profile: `none`, `ollvm-cff`, `ollvm-bcf-cff`, `ollvm-full`, `ollvm-heavy`, `garble-literals`, `string-encrypt`, `nimcrypt2` |
-| `NIMCRYPT2_FLAGS` | (empty) | Extra Nimcrypt2 flags (e.g. `-l` for OLLVM stub, `-s` to skip sandbox) |
+| `OBFUSCATION` | `none` | Obfuscation profile: `none`, `ollvm-cff`, `ollvm-bcf-cff`, `ollvm-full`, `ollvm-heavy`, `garble-literals`, `string-encrypt`, `calypso` |
+| `PACKER_FLAGS` | (empty) | Extra Calypso flags (e.g. `--unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp`) |
 | `SIGNING_PROFILE` | `none` | Limelighter code signing: `none`, `microsoft`, `google`, `intel`, `custom` |
 | `PE_SANITISE` | `true` | Strip Rich header, PDB path, debug info, version info |
 | `TARGET_ARCH` | `amd64` | Target architecture: `amd64`, `arm64` |

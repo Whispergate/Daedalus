@@ -198,13 +198,13 @@ class ScanArtifact(CommandBase):
 
                 if risk_data.get("static"):
                     static = risk_data["static"]
-                    lines.append(f"  Static:   {static.get('score', 'N/A')} — {static.get('verdict', 'N/A')}")
+                    lines.append(f"  Static:   {static.get('score', 'N/A')} - {static.get('verdict', 'N/A')}")
                 if risk_data.get("dynamic"):
                     dynamic = risk_data["dynamic"]
-                    lines.append(f"  Dynamic:  {dynamic.get('score', 'N/A')} — {dynamic.get('verdict', 'N/A')}")
+                    lines.append(f"  Dynamic:  {dynamic.get('score', 'N/A')} - {dynamic.get('verdict', 'N/A')}")
                 if risk_data.get("edr"):
                     edr = risk_data["edr"]
-                    lines.append(f"  EDR:      {edr.get('detected', 'N/A')} — {edr.get('product', edr_profile)}")
+                    lines.append(f"  EDR:      {edr.get('detected', 'N/A')} - {edr.get('product', edr_profile)}")
 
                 detections = risk_data.get("detections", [])
                 if detections:

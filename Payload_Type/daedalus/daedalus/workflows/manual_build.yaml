@@ -11,7 +11,7 @@ environment:
     LANGUAGE: c-mingw
     OUTPUT_FORMAT: exe
     OBFUSCATION: none
-    NIMCRYPT2_FLAGS: ""
+    PACKER_FLAGS: ""
     SIGNING_PROFILE: none
     PE_SANITISE: "true"
     TARGET_ARCH: amd64
@@ -43,7 +43,7 @@ steps:
           language: "{{env.LANGUAGE}}"
           output_format: "{{env.OUTPUT_FORMAT}}"
           obfuscation: "{{env.OBFUSCATION}}"
-          nimcrypt2_flags: "{{env.NIMCRYPT2_FLAGS}}"
+          packer_flags: "{{env.PACKER_FLAGS}}"
           signing_profile: "{{env.SIGNING_PROFILE}}"
           pe_sanitise: "{{env.PE_SANITISE}}"
           target_arch: "{{env.TARGET_ARCH}}"

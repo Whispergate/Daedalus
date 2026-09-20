@@ -160,7 +160,7 @@ class CheckBuild(CommandBase):
                 Response=output.encode(),
             ))
 
-            response.DisplayParams = f"{result.status.value} — {provider_name}/{job} #{result.build_id or build_id}"
+            response.DisplayParams = f"{result.status.value} - {provider_name}/{job} #{result.build_id or build_id}"
             response.Completed = True
 
         except Exception as e:

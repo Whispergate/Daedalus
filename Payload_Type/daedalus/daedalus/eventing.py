@@ -90,7 +90,7 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         "build_id": "BUILD_ID",
         "artifact_name": "ARTIFACT_NAME",
         "include_log": "INCLUDE_LOG",
-        "nimcrypt2_flags": "NIMCRYPT2_FLAGS",
+        "packer_flags": "PACKER_FLAGS",
         "signing_profile": "SIGNING_PROFILE",
         "pe_sanitise": "PE_SANITISE",
         "target_arch": "TARGET_ARCH",
@@ -1159,7 +1159,7 @@ async def _tag_payload_with_build(
 _BUILD_PARAM_KEYS = {
     "language", "format", "output_format", "obfuscation",
     "shellcode_path", "scan", "scan_type", "ref", "workflow",
-    "nimcrypt2_flags", "signing_profile", "pe_sanitise",
+    "packer_flags", "signing_profile", "pe_sanitise",
     "target_arch", "operator_id", "campaign_tag",
     "litterbox_scan", "shellcode_source", "mythic_payload_uuid",
     "repo_url", "repo_token", "source_path",

@@ -57,8 +57,8 @@ class ObfuscateBuildArguments(TaskArguments):
             CommandParameter(
                 name="obfuscation",
                 type=ParameterType.ChooseOneCustom,
-                description="Obfuscation level (garble for Go, ConfuserEx for .NET, nimcrypt2 for PE packing)",
-                choices=["none", "basic", "full", "garble", "nimcrypt2"],
+                description="Obfuscation level (garble for Go, ConfuserEx for .NET, calypso for PE packing)",
+                choices=["none", "basic", "full", "garble", "calypso"],
                 default_value="full",
                 parameter_group_info=[
                     ParameterGroupInfo(required=True, ui_position=3),
@@ -131,9 +131,9 @@ class ObfuscateBuildArguments(TaskArguments):
                 ],
             ),
             CommandParameter(
-                name="nimcrypt2_flags",
+                name="packer_flags",
                 type=ParameterType.String,
-                description="Extra Nimcrypt2 flags (e.g. -l for OLLVM stub, -s to skip sandbox checks)",
+                description="Extra Calypso flags (e.g. --unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp)",
                 default_value="",
                 parameter_group_info=[
                     ParameterGroupInfo(required=False, ui_position=11),
@@ -210,7 +210,7 @@ class ObfuscateBuild(CommandBase):
             source_path = taskData.args.get_arg("source_path") or ""
             ref = taskData.args.get_arg("ref") or "main"
             tool_type = taskData.args.get_arg("tool_type") or "register_only"
-            nimcrypt2_flags = taskData.args.get_arg("nimcrypt2_flags") or ""
+            packer_flags = taskData.args.get_arg("packer_flags") or ""
             signing_profile = taskData.args.get_arg("signing_profile") or "none"
             raw_timeout = taskData.args.get_arg("timeout") or 300
             timeout = int(raw_timeout) if raw_timeout else 300
@@ -229,8 +229,8 @@ class ObfuscateBuild(CommandBase):
             pipeline_info = f"lang={language}, fmt={output_format}, obf={obfuscation}"
             if signing_profile != "none":
                 pipeline_info += f", sign={signing_profile}"
-            if nimcrypt2_flags:
-                pipeline_info += f", nim2flags={nimcrypt2_flags}"
+            if packer_flags:
+                pipeline_info += f", packer={packer_flags}"
             await SendMythicRPCResponseCreate(MythicRPCResponseCreateMessage(
                 TaskID=taskData.Task.ID,
                 Response=(
@@ -255,8 +255,8 @@ class ObfuscateBuild(CommandBase):
                 build_params["SOURCE_PATH"] = source_path
             if ref:
                 build_params["REF"] = ref
-            if nimcrypt2_flags:
-                build_params["NIMCRYPT2_FLAGS"] = nimcrypt2_flags
+            if packer_flags:
+                build_params["PACKER_FLAGS"] = packer_flags
             if signing_profile and signing_profile != "none":
                 build_params["SIGNING_PROFILE"] = signing_profile
 

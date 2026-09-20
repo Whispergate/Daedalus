@@ -45,12 +45,12 @@ on:
         required: false
         default: "exe"
       OBFUSCATION:
-        description: "Obfuscation: none, basic, full, garble, nimcrypt2"
+        description: "Obfuscation: none, basic, full, garble, calypso"
         type: string
         required: false
         default: "none"
-      NIMCRYPT2_FLAGS:
-        description: "Extra flags for Nimcrypt2 (e.g. -l for LLVM, -s to skip sandbox checks)"
+      PACKER_FLAGS:
+        description: "Extra Calypso flags (e.g. --unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp)"
         type: string
         required: false
         default: ""
@@ -135,13 +135,13 @@ jobs:
         run: |
           echo "[*] Obfuscation=${{ inputs.OBFUSCATION }} Language=${{ inputs.LANGUAGE }}"
 
-          if [ "${{ inputs.OBFUSCATION }}" = "nimcrypt2" ]; then
-            NIM_TYPE="pe"
-            [ "${{ inputs.LANGUAGE }}" = "csharp" ] && NIM_TYPE="csharp"
+          if [ "${{ inputs.OBFUSCATION }}" = "calypso" ]; then
+            PACK_MODE="--peinject"
+            [ "${{ inputs.LANGUAGE }}" = "csharp" ] && PACK_MODE="--type csharp"
             for f in build/*.exe; do
               [ -f "$f" ] || continue
-              echo "[*] Packing $f with Nimcrypt2 (-t $NIM_TYPE)"
-              nimcrypt -f "$f" -t "$NIM_TYPE" -o "${f%.exe}-packed.exe" -u -e -g ${{ inputs.NIMCRYPT2_FLAGS }}
+              echo "[*] Packing $f with Calypso ($PACK_MODE)"
+              calypso --file "$f" $PACK_MODE --output "${f%.exe}-packed.exe" --hide --unhook ntdll.dll ${{ inputs.PACKER_FLAGS }}
               mv "${f%.exe}-packed.exe" "$f"
             done
           else

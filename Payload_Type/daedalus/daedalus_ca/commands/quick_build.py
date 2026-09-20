@@ -116,7 +116,7 @@ class QuickBuild(CommandBase):
     description = (
         "Trigger a CI/CD job with arbitrary parameters, wait for completion, "
         "download the artifact, and register or execute it. A generic build "
-        "command for any CI job — use daedalus_obfuscate_build for repo-based "
+        "command for any CI job - use daedalus_obfuscate_build for repo-based "
         "obfuscation pipelines instead."
     )
     help_cmd = (

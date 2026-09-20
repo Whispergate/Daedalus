@@ -19,7 +19,7 @@ variables:
   LANGUAGE: "csharp"
   OUTPUT_FORMAT: "exe"
   OBFUSCATION: "none"
-  NIMCRYPT2_FLAGS: ""
+  PACKER_FLAGS: ""
 
 clone_repo:
   stage: clone
@@ -120,13 +120,13 @@ obfuscate_tool:
     - echo "[*] Obfuscation=${OBFUSCATION} Language=${LANGUAGE}"
 
     - |
-      if [ "$OBFUSCATION" = "nimcrypt2" ]; then
-        NIM_TYPE="pe"
-        [ "$LANGUAGE" = "csharp" ] && NIM_TYPE="csharp"
+      if [ "$OBFUSCATION" = "calypso" ]; then
+        PACK_MODE="--peinject"
+        [ "$LANGUAGE" = "csharp" ] && PACK_MODE="--type csharp"
         for f in build/*.exe; do
           [ -f "$f" ] || continue
-          echo "[*] Packing $f with Nimcrypt2 (-t $NIM_TYPE)"
-          nimcrypt -f "$f" -t "$NIM_TYPE" -o "${f%.exe}-packed.exe" -u -e -g $NIMCRYPT2_FLAGS
+          echo "[*] Packing $f with Calypso ($PACK_MODE)"
+          calypso --file "$f" $PACK_MODE --output "${f%.exe}-packed.exe" --hide --unhook ntdll.dll $PACKER_FLAGS
           mv "${f%.exe}-packed.exe" "$f"
         done
       else

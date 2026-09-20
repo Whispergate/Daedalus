@@ -131,7 +131,7 @@ class GetLog(CommandBase):
                 Response=output.encode(),
             ))
 
-            response.DisplayParams = f"{status.status.value} — {provider_name}/{job} #{status.build_id or build_id}"
+            response.DisplayParams = f"{status.status.value} - {provider_name}/{job} #{status.build_id or build_id}"
             response.Completed = True
 
         except Exception as e:

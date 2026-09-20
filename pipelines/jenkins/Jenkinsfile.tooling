@@ -17,8 +17,8 @@ pipeline {
         string(name: 'SOURCE_PATH',   defaultValue: '',      description: 'Subdirectory or file to compile (empty = repo root)')
         string(name: 'LANGUAGE',      defaultValue: 'csharp', description: 'Build language: csharp, go, rust, c-mingw, cpp-mingw, nim')
         string(name: 'OUTPUT_FORMAT', defaultValue: 'exe',   description: 'Output format: exe, dll, bin, shellcode, svc')
-        string(name: 'OBFUSCATION',   defaultValue: 'none',  description: 'Obfuscation level: none, basic, full, garble, nimcrypt2')
-        string(name: 'NIMCRYPT2_FLAGS', defaultValue: '',    description: 'Extra Nimcrypt2 flags (e.g. -l for OLLVM, -s to skip sandbox checks)')
+        string(name: 'OBFUSCATION',   defaultValue: 'none',  description: 'Obfuscation level: none, basic, full, garble, calypso')
+        string(name: 'PACKER_FLAGS', defaultValue: '',    description: 'Extra Calypso flags (e.g. --unhook ntdll.dll --sleep 10 --amsi hwbp --etw hwbp)')
     }
 
     stages {
@@ -213,14 +213,14 @@ CRPROJ
                             '''
                         }
 
-                    } else if (params.OBFUSCATION == 'nimcrypt2') {
-                        def nimType = (params.LANGUAGE == 'csharp') ? 'csharp' : 'pe'
-                        def extraFlags = params.NIMCRYPT2_FLAGS ?: ''
+                    } else if (params.OBFUSCATION == 'calypso') {
+                        def packMode = (params.LANGUAGE == 'csharp') ? '--type csharp' : '--peinject'
+                        def extraFlags = params.PACKER_FLAGS ?: ''
                         sh """
                             for f in build/*.exe; do
                                 [ -f "\$f" ] || continue
-                                echo "[*] Packing \$f with Nimcrypt2 (-t ${nimType})"
-                                nimcrypt -f "\$f" -t ${nimType} -o "\${f%.exe}-packed.exe" -u -e -g ${extraFlags}
+                                echo "[*] Packing \$f with Calypso (${packMode})"
+                                calypso --file "\$f" ${packMode} --output "\${f%.exe}-packed.exe" --hide --unhook ntdll.dll ${extraFlags}
                                 mv "\${f%.exe}-packed.exe" "\$f"
                             done
                         """
