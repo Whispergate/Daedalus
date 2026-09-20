@@ -11,6 +11,8 @@ environment:
     LANGUAGE: c-mingw
     OUTPUT_FORMAT: exe
     OBFUSCATION: none
+    CALYPSO_MODE: pack
+    PACKER_PRESET: ""
     PACKER_FLAGS: ""
     SIGNING_PROFILE: none
     PE_SANITISE: "true"
@@ -45,6 +47,8 @@ steps:
           language: "{{env.LANGUAGE}}"
           output_format: "{{env.OUTPUT_FORMAT}}"
           obfuscation: "{{env.OBFUSCATION}}"
+          calypso_mode: "{{env.CALYPSO_MODE}}"
+          packer_preset: "{{env.PACKER_PRESET}}"
           packer_flags: "{{env.PACKER_FLAGS}}"
           signing_profile: "{{env.SIGNING_PROFILE}}"
           pe_sanitise: "{{env.PE_SANITISE}}"
