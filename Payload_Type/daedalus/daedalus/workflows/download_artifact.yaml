@@ -7,6 +7,7 @@ environment:
     JOB: ""
     JENKINS_URL: ""
     JENKINS_USER: ""
+    JENKINS_TOKEN: ""
     LANGUAGE: c-mingw
     BUILD_ID: ""
     ARTIFACT_NAME: ""
@@ -26,6 +27,7 @@ steps:
       inputs:
           provider: "{{env.PROVIDER}}"
           job: "{{env.JOB}}"
+          jenkins_token: "{{env.JENKINS_TOKEN}}"
           language: "{{env.LANGUAGE}}"
           build_id: "{{env.BUILD_ID}}"
           artifact_name: "{{env.ARTIFACT_NAME}}"

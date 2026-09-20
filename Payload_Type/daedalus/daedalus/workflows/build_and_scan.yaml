@@ -7,6 +7,7 @@ environment:
     JOB: ""
     JENKINS_URL: ""
     JENKINS_USER: ""
+    JENKINS_TOKEN: ""
     LANGUAGE: c-mingw
     OUTPUT_FORMAT: exe
     OBFUSCATION: none
@@ -37,6 +38,7 @@ steps:
       inputs:
           provider: "{{env.PROVIDER}}"
           job: "{{env.JOB}}"
+          jenkins_token: "{{env.JENKINS_TOKEN}}"
           mythic_api_token: "{{mythic.apitoken}}"
           payload_uuid: "{{env.PAYLOAD_UUID}}"
           timeout: "{{env.TIMEOUT}}"

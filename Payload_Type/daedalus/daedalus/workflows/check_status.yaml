@@ -7,6 +7,7 @@ environment:
     JOB: ""
     JENKINS_URL: ""
     JENKINS_USER: ""
+    JENKINS_TOKEN: ""
     LANGUAGE: c-mingw
     BUILD_ID: ""
     INCLUDE_LOG: "false"
@@ -24,6 +25,7 @@ steps:
       inputs:
           provider: "{{env.PROVIDER}}"
           job: "{{env.JOB}}"
+          jenkins_token: "{{env.JENKINS_TOKEN}}"
           language: "{{env.LANGUAGE}}"
           build_id: "{{env.BUILD_ID}}"
           include_log: "{{env.INCLUDE_LOG}}"
