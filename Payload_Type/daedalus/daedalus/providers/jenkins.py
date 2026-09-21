@@ -63,6 +63,22 @@ class JenkinsProvider(CIProvider):
         except httpx.HTTPError as exc:
             logger.warning("Crumb fetch error: %r", exc)
 
+    async def _get_job_params(self, client: httpx.AsyncClient, job_path: str) -> set[str] | None:
+        url = f"{self.base_url}/{job_path}/api/json?tree=property[parameterDefinitions[name]]"
+        try:
+            r = await client.get(url)
+            if r.status_code != 200:
+                return None
+            for prop in r.json().get("property", []):
+                defs = prop.get("parameterDefinitions")
+                if defs is not None:
+                    names = {d["name"] for d in defs if "name" in d}
+                    logger.info("Job accepts parameters: %s", sorted(names))
+                    return names
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            logger.warning("Failed to fetch job params: %r", exc)
+        return None
+
     async def trigger_build(
         self,
         job: str,
@@ -72,6 +88,14 @@ class JenkinsProvider(CIProvider):
 
         async with self._client() as client:
             await self._fetch_crumb(client)
+            if parameters:
+                known = await self._get_job_params(client, job_path)
+                if known is not None:
+                    dropped = {k for k in parameters if k not in known}
+                    if dropped:
+                        logger.warning("Dropping params unknown to job: %s", sorted(dropped))
+                        parameters = {k: v for k, v in parameters.items() if k in known}
+
             if parameters:
                 endpoint = f"{self.base_url}/{job_path}/buildWithParameters"
                 logger.warning("POST %s (params: %s)", endpoint, list(parameters.keys()))

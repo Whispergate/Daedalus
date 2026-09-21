@@ -26,15 +26,6 @@ Daedalus offers three execution/registration modes for supported payload types:
 | Forgejo Actions | `forgejo` | Personal access token | `owner/repo` or defaults to env vars |
 | Gitea Actions | `gitea` | Personal access token | `owner/repo` or defaults to env vars |
 
-### Supported Agents
-
-| Agent | BOF Command | Assembly Command | Default Assembly Method | Upload Command |
-|-------|-------------|-----------------|------------------------|----------------|
-| Apollo | `execute_coff` | `execute_assembly` / `inline_assembly` | `inline_assembly` | `upload` |
-| Athena | `coff` | `execute-assembly` | `execute_assembly` | `upload` |
-| Merlin | `coff` | `execute-assembly` | `execute_assembly` | `upload` |
-| Starburst | `execute_coff` | `execute_assembly` | `execute_assembly` | `upload` |
-
 ### Credential Resolution
 
 CA commands resolve credentials in priority order:
