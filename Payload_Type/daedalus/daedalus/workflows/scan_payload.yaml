@@ -23,10 +23,10 @@ steps:
           container_name: daedalus
           function_name: scan_payload
       inputs:
-          payload_uuid: "{{env.PAYLOAD_UUID}}"
-          mythic_api_token: "{{mythic.apitoken}}"
-          litterbox_url: "{{env.LITTERBOX_URL}}"
-          scan_type: "{{env.SCAN_TYPE}}"
-          edr_profile: "{{env.EDR_PROFILE}}"
-          method: "{{env.SCAN_METHOD}}"
-          timeout: "{{env.TIMEOUT}}"
+          payload_uuid: env.PAYLOAD_UUID
+          mythic_api_token: mythic.apitoken
+          litterbox_url: env.LITTERBOX_URL
+          scan_type: env.SCAN_TYPE
+          edr_profile: env.EDR_PROFILE
+          method: env.SCAN_METHOD
+          timeout: env.TIMEOUT

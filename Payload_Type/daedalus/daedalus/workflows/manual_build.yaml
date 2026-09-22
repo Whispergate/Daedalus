@@ -35,21 +35,23 @@ steps:
           container_name: daedalus
           function_name: trigger_build
       inputs:
-          provider: "{{env.PROVIDER}}"
-          job: "{{env.JOB}}"
-          jenkins_token: "{{env.JENKINS_TOKEN}}"
-          mythic_api_token: "{{mythic.apitoken}}"
-          payload_uuid: "{{env.PAYLOAD_UUID}}"
-          poll: "{{env.POLL}}"
-          timeout: "{{env.TIMEOUT}}"
-          language: "{{env.LANGUAGE}}"
-          output_format: "{{env.OUTPUT_FORMAT}}"
-          obfuscation: "{{env.OBFUSCATION}}"
-          calypso_mode: "{{env.CALYPSO_MODE}}"
-          packer_preset: "{{env.PACKER_PRESET}}"
-          packer_flags: "{{env.PACKER_FLAGS}}"
-          signing_profile: "{{env.SIGNING_PROFILE}}"
-          pe_sanitise: "{{env.PE_SANITISE}}"
-          target_arch: "{{env.TARGET_ARCH}}"
-          operator_id: "{{env.OPERATOR_ID}}"
-          campaign_tag: "{{env.CAMPAIGN_TAG}}"
+          provider: env.PROVIDER
+          job: env.JOB
+          jenkins_url: env.JENKINS_URL
+          jenkins_user: env.JENKINS_USER
+          jenkins_token: env.JENKINS_TOKEN
+          mythic_api_token: mythic.apitoken
+          payload_uuid: env.PAYLOAD_UUID
+          poll: env.POLL
+          timeout: env.TIMEOUT
+          language: env.LANGUAGE
+          output_format: env.OUTPUT_FORMAT
+          obfuscation: env.OBFUSCATION
+          param_calypso_mode: env.CALYPSO_MODE
+          param_packer_preset: env.PACKER_PRESET
+          param_packer_flags: env.PACKER_FLAGS
+          param_signing_profile: env.SIGNING_PROFILE
+          param_pe_sanitise: env.PE_SANITISE
+          param_target_arch: env.TARGET_ARCH
+          param_operator_id: env.OPERATOR_ID
+          param_campaign_tag: env.CAMPAIGN_TAG

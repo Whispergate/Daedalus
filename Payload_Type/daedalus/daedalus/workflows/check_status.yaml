@@ -23,9 +23,11 @@ steps:
           container_name: daedalus
           function_name: check_status
       inputs:
-          provider: "{{env.PROVIDER}}"
-          job: "{{env.JOB}}"
-          jenkins_token: "{{env.JENKINS_TOKEN}}"
-          language: "{{env.LANGUAGE}}"
-          build_id: "{{env.BUILD_ID}}"
-          include_log: "{{env.INCLUDE_LOG}}"
+          provider: env.PROVIDER
+          job: env.JOB
+          jenkins_url: env.JENKINS_URL
+          jenkins_user: env.JENKINS_USER
+          jenkins_token: env.JENKINS_TOKEN
+          language: env.LANGUAGE
+          build_id: env.BUILD_ID
+          include_log: env.INCLUDE_LOG
