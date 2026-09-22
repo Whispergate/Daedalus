@@ -4,26 +4,26 @@ trigger: payload_build_finish
 trigger_data:
     payload_types: []
 environment:
-    PROVIDER: jenkins
-    JOB: ""
-    JENKINS_URL: ""
-    JENKINS_USER: ""
-    JENKINS_TOKEN: ""
-    LANGUAGE: c-mingw
-    OUTPUT_FORMAT: exe
-    OBFUSCATION: none
-    CALYPSO_MODE: pack
-    PACKER_PRESET: ""
-    PACKER_FLAGS: ""
-    SIGNING_PROFILE: none
-    PE_SANITISE: "true"
-    TARGET_ARCH: amd64
-    LITTERBOX_SCAN: "true"
-    TIMEOUT: "300"
-    SCAN_TYPE: all
-    LITTERBOX_URL: ""
-    OPERATOR_ID: ""
+    CALYPSO_MODE: standalone
     CAMPAIGN_TAG: ""
+    JENKINS_TOKEN: ""
+    JENKINS_URL: http://10.5.99.3:8080
+    JENKINS_USER: admin
+    JOB: ""
+    LANGUAGE: c-mingw
+    LITTERBOX_SCAN: "true"
+    LITTERBOX_URL: http://10.5.99.12:1337
+    OBFUSCATION: calypso
+    OPERATOR_ID: ""
+    OUTPUT_FORMAT: exe
+    PACKER_FLAGS: ""
+    PACKER_PRESET: evasive-drip
+    PE_SANITISE: "true"
+    PROVIDER: jenkins
+    SCAN_TYPE: all
+    SIGNING_PROFILE: none
+    TARGET_ARCH: amd64
+    TIMEOUT: "300"
 keywords:
     - daedalus
     - build
@@ -40,8 +40,6 @@ steps:
       inputs:
           provider: env.PROVIDER
           job: env.JOB
-          jenkins_url: env.JENKINS_URL
-          jenkins_user: env.JENKINS_USER
           jenkins_token: env.JENKINS_TOKEN
           mythic_api_token: mythic.apitoken
           payload_uuid: env.uuid
@@ -49,14 +47,14 @@ steps:
           language: env.LANGUAGE
           output_format: env.OUTPUT_FORMAT
           obfuscation: env.OBFUSCATION
+          calypso_mode: env.CALYPSO_MODE
+          packer_preset: env.PACKER_PRESET
+          packer_flags: env.PACKER_FLAGS
+          signing_profile: env.SIGNING_PROFILE
+          pe_sanitise: env.PE_SANITISE
+          target_arch: env.TARGET_ARCH
           litterbox_scan: env.LITTERBOX_SCAN
           litterbox_url: env.LITTERBOX_URL
           scan_type: env.SCAN_TYPE
-          param_calypso_mode: env.CALYPSO_MODE
-          param_packer_preset: env.PACKER_PRESET
-          param_packer_flags: env.PACKER_FLAGS
-          param_signing_profile: env.SIGNING_PROFILE
-          param_pe_sanitise: env.PE_SANITISE
-          param_target_arch: env.TARGET_ARCH
-          param_operator_id: env.OPERATOR_ID
-          param_campaign_tag: env.CAMPAIGN_TAG
+          operator_id: env.OPERATOR_ID
+          campaign_tag: env.CAMPAIGN_TAG
