@@ -158,6 +158,11 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         logger.info("Using startup API token as fallback")
 
     # Trigger-sourced payload UUID (payload_build_finish events).
+    logger.warning(
+        "payload_uuid resolution: input=%r, ActionData keys=%s",
+        out.get("payload_uuid", ""),
+        list((action or {}).keys()),
+    )
     if not out.get("payload_uuid"):
         trigger_uuid = (
             action.get("payload_uuid")
@@ -166,7 +171,9 @@ def _resolve_inputs(msg: NewCustomEventingMessage) -> dict:
         )
         if trigger_uuid:
             out["payload_uuid"] = trigger_uuid
-            logger.info("Payload UUID from trigger ActionData: %s", trigger_uuid)
+            logger.warning("Payload UUID from trigger ActionData: %s", trigger_uuid)
+        else:
+            logger.warning("No payload_uuid found in inputs or ActionData")
 
     logger.info(
         "Resolved inputs: %s",
@@ -304,6 +311,7 @@ async def trigger_build(msg: NewCustomEventingMessage) -> NewCustomEventingMessa
         payload_int_id = None
         auth_headers = {}
         if payload_uuid and mythic_token:
+            build_params["MYTHIC_PAYLOAD_UUID"] = payload_uuid
             auth_headers = {"Authorization": f"Bearer {mythic_token}"}
             payload_int_id, agent_file_id, filename = await _query_payload(auth_headers, payload_uuid)
             if agent_file_id:
@@ -828,6 +836,7 @@ async def build_and_scan(msg: NewCustomEventingMessage) -> NewCustomEventingMess
 
         payload_int_id = None
         if payload_uuid:
+            build_params["MYTHIC_PAYLOAD_UUID"] = payload_uuid
             payload_int_id, agent_file_id, filename = await _query_payload(auth_headers, payload_uuid)
             if agent_file_id:
                 payload_bytes = await _download_file(auth_headers, agent_file_id)

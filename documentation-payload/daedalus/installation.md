@@ -172,3 +172,28 @@ After starting Mythic with Daedalus installed:
 2. You should see the seven Daedalus workflows registered
 3. Edit a workflow's environment variables to set your CI/CD provider details
 4. Run the **Daedalus Manual Build** workflow to test connectivity
+
+## Troubleshooting
+
+### GraphQL Authentication Error
+
+```
+Daedalus error: GraphQL error: [{'message': 'Authentication hook unauthorized this request', 'extensions': {'path': '$', 'code': 'access-denied'}}]
+```
+
+This error occurs when the Daedalus container's authentication token becomes stale or out of sync with Mythic's GraphQL API. This can happen after a Mythic restart, database migration, or if the container has been running for an extended period.
+
+**Fix:** Restart the Daedalus container:
+
+```bash
+sudo ./mythic-cli restart daedalus
+```
+
+The container will re-register with Mythic and obtain a fresh API token on startup.
+
+### Workflow Not Appearing in Eventing UI
+
+If workflows are missing after a container rebuild:
+
+1. Re-upload each YAML file from `Payload_Type/daedalus/daedalus/workflows/*.yaml` through the Mythic Eventing UI
+2. This is required due to a known Mythic bug in the `eventingImportContainerWorkflow` mutation (see [Configuration](#eventing-workflows) above)
