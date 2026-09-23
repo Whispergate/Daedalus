@@ -4,17 +4,26 @@ trigger: payload_build_finish
 trigger_data:
     payload_types: []
 environment:
-    PROVIDER: jenkins
-    JOB: ""
+    CALYPSO_MODE: standalone
+    CAMPAIGN_TAG: ""
+    JENKINS_TOKEN: ""
     JENKINS_URL: http://10.5.99.3:8080
     JENKINS_USER: admin
-    JENKINS_TOKEN: admin
+    JOB: ""
     LANGUAGE: c-mingw
-    OUTPUT_FORMAT: exe
-    OBFUSCATION: none
-    TIMEOUT: "300"
-    SCAN_TYPE: all
+    LITTERBOX_SCAN: "true"
     LITTERBOX_URL: http://10.5.99.12:1337
+    OBFUSCATION: calypso
+    OPERATOR_ID: ""
+    OUTPUT_FORMAT: exe
+    PACKER_FLAGS: ""
+    PACKER_PRESET: evasive-drip
+    PE_SANITISE: "true"
+    PROVIDER: jenkins
+    SCAN_TYPE: all
+    SIGNING_PROFILE: none
+    TARGET_ARCH: amd64
+    TIMEOUT: "300"
 keywords:
     - daedalus
     - build
@@ -29,13 +38,23 @@ steps:
           container_name: daedalus
           function_name: build_and_scan
       inputs:
-          provider: "{{env.PROVIDER}}"
-          job: "{{env.JOB}}"
-          mythic_api_token: "{{mythic.apitoken}}"
-          payload_uuid: "{{trigger.payload_uuid}}"
-          timeout: "{{env.TIMEOUT}}"
-          language: "{{env.LANGUAGE}}"
-          output_format: "{{env.OUTPUT_FORMAT}}"
-          obfuscation: "{{env.OBFUSCATION}}"
-          litterbox_url: "{{env.LITTERBOX_URL}}"
-          scan_type: "{{env.SCAN_TYPE}}"
+          provider: env.PROVIDER
+          job: env.JOB
+          jenkins_token: env.JENKINS_TOKEN
+          mythic_api_token: mythic.apitoken
+          payload_uuid: env.uuid
+          timeout: env.TIMEOUT
+          language: env.LANGUAGE
+          output_format: env.OUTPUT_FORMAT
+          obfuscation: env.OBFUSCATION
+          calypso_mode: env.CALYPSO_MODE
+          packer_preset: env.PACKER_PRESET
+          packer_flags: env.PACKER_FLAGS
+          signing_profile: env.SIGNING_PROFILE
+          pe_sanitise: env.PE_SANITISE
+          target_arch: env.TARGET_ARCH
+          litterbox_scan: env.LITTERBOX_SCAN
+          litterbox_url: env.LITTERBOX_URL
+          scan_type: env.SCAN_TYPE
+          operator_id: env.OPERATOR_ID
+          campaign_tag: env.CAMPAIGN_TAG

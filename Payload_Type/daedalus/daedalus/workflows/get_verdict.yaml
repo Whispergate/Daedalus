@@ -17,5 +17,5 @@ steps:
           container_name: daedalus
           function_name: get_verdict
       inputs:
-          payload_uuid: "{{env.PAYLOAD_UUID}}"
-          mythic_api_token: "{{mythic.apitoken}}"
+          payload_uuid: env.PAYLOAD_UUID
+          mythic_api_token: mythic.apitoken

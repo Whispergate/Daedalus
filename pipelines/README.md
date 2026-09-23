@@ -43,3 +43,9 @@ For Mythic payload fetching, add these as secrets in your CI system:
 | `MYTHIC_TOKEN` | Mythic API token with file download permissions |
 
 Jenkins passes these as build parameters. GitHub/Forgejo/Gitea read them from repository secrets. GitLab uses CI/CD variables (mark as protected and masked).
+
+---
+
+## Tooling Pipeline
+
+The `daedalus_obfuscate_build` command triggers the `daedalus-tooling-build` Jenkins job, which is deployed from the Labyrinth repo's `pipeline/Jenkinsfile.tooling`. That single pipeline handles cloning, compilation, obfuscation (ConfuserEx, Garble, Calypso), signing, and artifact archiving for all languages. No separate per-provider tooling templates are needed.

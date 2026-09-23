@@ -5,9 +5,9 @@ trigger_data: {}
 environment:
     PROVIDER: jenkins
     JOB: ""
-    JENKINS_URL: http://10.5.99.3:8080
-    JENKINS_USER: admin
-    JENKINS_TOKEN: admin
+    JENKINS_URL: ""
+    JENKINS_USER: ""
+    JENKINS_TOKEN: ""
     LANGUAGE: c-mingw
     BUILD_ID: ""
     INCLUDE_LOG: "false"
@@ -23,8 +23,9 @@ steps:
           container_name: daedalus
           function_name: check_status
       inputs:
-          provider: "{{env.PROVIDER}}"
-          job: "{{env.JOB}}"
-          language: "{{env.LANGUAGE}}"
-          build_id: "{{env.BUILD_ID}}"
-          include_log: "{{env.INCLUDE_LOG}}"
+          provider: env.PROVIDER
+          job: env.JOB
+          jenkins_token: env.JENKINS_TOKEN
+          language: env.LANGUAGE
+          build_id: env.BUILD_ID
+          include_log: env.INCLUDE_LOG

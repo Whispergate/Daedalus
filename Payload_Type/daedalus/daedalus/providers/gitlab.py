@@ -167,6 +167,25 @@ class GitLabProvider(CIProvider):
             r.raise_for_status()
             return r.content
 
+    async def list_artifacts(self, job: str, build_id: str) -> list[dict]:
+        pid = self._resolve_project(job)
+        url = self._api(f"/projects/{pid}/pipelines/{build_id}/jobs")
+
+        async with self._client() as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                return []
+            jobs = r.json()
+            return [
+                {
+                    "relativePath": j.get("name", ""),
+                    "fileName": j.get("artifacts_file", {}).get("filename", j.get("name", "")),
+                    "id": j.get("id"),
+                }
+                for j in jobs
+                if j.get("artifacts_file", {}).get("filename")
+            ]
+
     async def list_jobs(self) -> list[dict]:
         pid = self.project_id
         url = self._api(f"/projects/{pid}/pipelines")

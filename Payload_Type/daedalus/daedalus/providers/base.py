@@ -57,3 +57,6 @@ class CIProvider(ABC):
     @abstractmethod
     async def get_build_log(self, job: str, build_id: str, tail: int = 100) -> str:
         ...
+
+    async def list_artifacts(self, job: str, build_id: str) -> list[dict]:
+        return []

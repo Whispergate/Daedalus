@@ -68,6 +68,8 @@ class GitHubProvider(CIProvider):
         }
 
         async with self._client() as client:
+            known_ids = await self._get_recent_run_ids(client, owner, repo)
+
             url = f"{self.api_base}/repos/{owner}/{repo}/actions/workflows/{workflow_file}/dispatches"
             r = await client.post(url, json=payload)
 
@@ -77,8 +79,7 @@ class GitHubProvider(CIProvider):
                     error=f"Dispatch failed: HTTP {r.status_code} - {r.text[:500]}",
                 )
 
-            await asyncio.sleep(3)
-            run_id = await self._find_latest_run(client, owner, repo)
+            run_id = await self._find_new_run(client, owner, repo, known_ids)
 
         return BuildResult(
             provider=self.name,
@@ -87,21 +88,35 @@ class GitHubProvider(CIProvider):
             url=f"https://github.com/{owner}/{repo}/actions/runs/{run_id}" if run_id else "",
         )
 
-    async def _find_latest_run(self, client: httpx.AsyncClient, owner: str, repo: str) -> str:
+    async def _get_recent_run_ids(
+        self, client: httpx.AsyncClient, owner: str, repo: str,
+    ) -> set[str]:
         url = f"{self.api_base}/repos/{owner}/{repo}/actions/runs"
         try:
-            r = await client.get(url, params={"per_page": 5, "status": "queued"})
+            r = await client.get(url, params={"per_page": 10})
             if r.status_code == 200:
-                runs = r.json().get("workflow_runs", [])
-                if runs:
-                    return str(runs[0]["id"])
-            r = await client.get(url, params={"per_page": 1})
-            if r.status_code == 200:
-                runs = r.json().get("workflow_runs", [])
-                if runs:
-                    return str(runs[0]["id"])
+                return {str(run["id"]) for run in r.json().get("workflow_runs", [])}
         except httpx.HTTPError:
             pass
+        return set()
+
+    async def _find_new_run(
+        self, client: httpx.AsyncClient, owner: str, repo: str,
+        known_ids: set[str], max_attempts: int = 10,
+    ) -> str:
+        url = f"{self.api_base}/repos/{owner}/{repo}/actions/runs"
+        for attempt in range(max_attempts):
+            await asyncio.sleep(2 + attempt)
+            try:
+                r = await client.get(url, params={"per_page": 5})
+                if r.status_code == 200:
+                    for run in r.json().get("workflow_runs", []):
+                        rid = str(run["id"])
+                        if rid not in known_ids:
+                            return rid
+            except httpx.HTTPError:
+                pass
+        logger.warning("Could not find new run after %d attempts", max_attempts)
         return ""
 
     async def get_build_status(self, job: str, build_id: str) -> BuildResult:
@@ -156,6 +171,24 @@ class GitHubProvider(CIProvider):
             r = await client.get(dl_url, follow_redirects=True)
             r.raise_for_status()
             return r.content
+
+    async def list_artifacts(self, job: str, build_id: str) -> list[dict]:
+        owner, repo = self._resolve_repo(job)
+        url = f"{self.api_base}/repos/{owner}/{repo}/actions/runs/{build_id}/artifacts"
+
+        async with self._client() as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                return []
+            artifacts = r.json().get("artifacts", [])
+            return [
+                {
+                    "relativePath": a.get("name", ""),
+                    "fileName": a.get("name", ""),
+                    "id": a.get("id"),
+                }
+                for a in artifacts
+            ]
 
     async def list_jobs(self) -> list[dict]:
         url = f"{self.api_base}/repos/{self.owner}/{self.repo}/actions/runs"

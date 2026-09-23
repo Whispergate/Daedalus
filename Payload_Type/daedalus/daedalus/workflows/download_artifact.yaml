@@ -5,9 +5,9 @@ trigger_data: {}
 environment:
     PROVIDER: jenkins
     JOB: ""
-    JENKINS_URL: http://10.5.99.3:8080
-    JENKINS_USER: admin
-    JENKINS_TOKEN: admin
+    JENKINS_URL: ""
+    JENKINS_USER: ""
+    JENKINS_TOKEN: ""
     LANGUAGE: c-mingw
     BUILD_ID: ""
     ARTIFACT_NAME: ""
@@ -25,10 +25,11 @@ steps:
           container_name: daedalus
           function_name: download_artifact
       inputs:
-          provider: "{{env.PROVIDER}}"
-          job: "{{env.JOB}}"
-          language: "{{env.LANGUAGE}}"
-          build_id: "{{env.BUILD_ID}}"
-          artifact_name: "{{env.ARTIFACT_NAME}}"
-          mythic_api_token: "{{mythic.apitoken}}"
-          payload_uuid: "{{env.PAYLOAD_UUID}}"
+          provider: env.PROVIDER
+          job: env.JOB
+          jenkins_token: env.JENKINS_TOKEN
+          language: env.LANGUAGE
+          build_id: env.BUILD_ID
+          artifact_name: env.ARTIFACT_NAME
+          mythic_api_token: mythic.apitoken
+          payload_uuid: env.PAYLOAD_UUID
